@@ -1,0 +1,56 @@
+1. STAT 545 A+B
+    Introduction to Data Analysis using R
+    Emphasis in learning concepts of R that assist Data Analysis
+    good for beginners with limited idea on what data analysis is
+    Rating: Excellent
+        - instructor is well versed, the assignments are manageable and hands on. 
+        - 3 TAs who are available to answer general questions related to R / data analysis  
+    Downsides:
+        - if you are looking to improve statistical basis for data analysis, this is not the right course
+
+2. ATSC 507: NWP
+    Numerical Weather Prediction
+
+    Rating: Excellent
+        - definitely recommend as it is very relevant to our team's work
+        - Combination of programming, WRF runs and mathematic derivation excercise
+        - learn about scientific foundation behind NWP models
+
+3. EOSC 511: Numerical techniques
+    implicit and explicit methods to solve partial differential equations
+
+    Rating: Poor
+        - Personally found the course to be messy and stressful
+        - No feedback to the assignments submitted
+        - might be relevant to someone who plans to work on building a new model
+        - (only) Good point: helps improve your python knowledge
+    
+4. CEEN 525: Energy Policy
+    Renewable Energy policy. Starts with framework on how policy construction takes place.
+    Then moves to policy instruments relevant to renewable energy, and assessing policy effectiveness
+
+    Rating: Good
+        - Recommend for people planning on pursuing a career in renewable energy
+        - final project consisted of a policy analysis, providing you with a flexibility to choose
+            an renewable energy related policy to critique on.
+
+    Downsides:
+        - only 2 CP. I need to take one more course because of this one. 
+        - Get ready to read a lot   
+    
+5. ECON 471: Economics of Non-Renewable Resources
+    I took the course as a primer to economic concepts. This was my first introduction to R 
+    before taking the STAT 545 course. So, it was useful. 
+
+    Rating: Good
+        - If you want to learn economics but not take the entire 4 year degree, this might
+            be the course 
+    
+    Downsides:
+        - Graded through tests. 
+        - Undergraduate level course
+
+6. ATSC 448A: directed studies
+    Research proposal + ATSC 201
+    ATSC 201 is a good course to learn fundamentals of meteorology with some math and learning
+    about radars and weather charts
