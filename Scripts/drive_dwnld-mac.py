@@ -1,3 +1,4 @@
+#!/Users/akadel/opt/anaconda3/envs/thesis/bin/python
 # %%
 # run the file by using command: python <script_path> > <text_file_path>
 import os
@@ -29,12 +30,11 @@ def Nepal_extractor(Q_file, npl):
 
 # %%
 src_rt      = r"wfrt:/reforecasts-2/"
-src_dir     = pd.date_range(start='20140701', end='20140701').strftime("%Y%m%d.%H").values
-dst_rt      = r"D:\Masters\Thesis\Test_downloads"
+src_dir     = pd.date_range(start='20160101', end='20161231').strftime("%Y%m%d.%H").values
+dst_rt      = "/Users/akadel/Documents/Kadel/Thesis/Fcst_data"
 # rclone_cmd  = "rclone copy --verbose --update --progress --dry-run "
-mappath 	= r"..\GIS_data\Nepal-GIS_files\Nepal-boundary\data\Outline.shp"
+mappath 	= "/Users/akadel/Documents/Kadel/Thesis/Nepal-boundary/data/Outline.shp"
 rclone_cmd  = "rclone copy --verbose --update --progress "
-
 
 # %% load the shapefile for map of Nepal
 npl  = gpd.read_file(mappath)
@@ -43,7 +43,7 @@ npl  = gpd.read_file(mappath)
 for folder in src_dir:
     print(folder)
     print("\n")
-    for i in [*range(1,16), 52]:
+    for i in [*range(1,52), 52]:
     # for i in [1]:
         print(i)
         fname   = f"Qout_south_asia_mainland_{i:d}.nc"
