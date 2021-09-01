@@ -11,7 +11,7 @@ def savename(filepath):
         os.mkdir(fldr_pth)
     sav_pth  = os.path.join( fldr_pth, 
                re.split(r"[\\]", filepath)[-1]) \
-                    .replace("south_asia","npl")
+                    .replace("south_asia_geoglowsn","npl")
     return sav_pth
 
 # %%
@@ -26,6 +26,7 @@ for root, dirs, files in os.walk(dirName):
     for i in files:
         cntnt = os.path.join(root,i)
         if cntnt.endswith('.nc') == True:
+            # change the provision for count 
             data_npl = Nepal_extractor.main(cntnt, mappath, plt_maps, count)
             
             sav_pth = savename(cntnt)

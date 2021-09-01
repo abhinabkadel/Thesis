@@ -65,12 +65,6 @@ def rivid_extractor(dat_pts, npl):
 
 	return data_filtrd
 
-
-def file_rename(Qout_file):
-
-	print()
-	
-
 def main(Qout_file, mappath, plt_maps, count):
 	#%% Read the data and the map files:
 	data = xr.open_dataset(Qout_file)
@@ -79,7 +73,7 @@ def main(Qout_file, mappath, plt_maps, count):
 	dat_pts = pd.DataFrame (data = list(zip(data.lon.values, data.lat.values, data.rivid.values) ),
 						columns=['longitude', 'latitude', 'rivid'] )
 
-	# check if npl_rivid.py file exists in the scripts folder
+	# check if npl_rivid.npy file exists in the scripts folder
 	if ( os.path.isfile('npl_rivid.npy') == False ) :
 		print("No river ID information file found")
 		data_filtrd = rivid_extractor(dat_pts, mappath)
@@ -90,7 +84,7 @@ def main(Qout_file, mappath, plt_maps, count):
 			plotter(data, npl, npl_data = data_filtrd, typ = 'pandas')
 
 	elif ( os.path.isfile('npl_rivid.npy') == True ):
-		print(f"Subsetting the data file {count:d}...\n")
+		# print(f"Subsetting the data file {count:d}...\n")
 		# load the file with desired river id data
 		npl_rivid 	= np.load('npl_rivid.npy')
 
