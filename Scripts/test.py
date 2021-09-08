@@ -13,7 +13,7 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     fcst_data = []
     for init_date in init_date_list:
         for i in ens_members:
-            fname       = f"Qout_south_asia_mainland_{i:d}.nc"
+            fname       = f"Qout_npl_{i:d}.nc"
             file_pth    = os.path.join(rt_dir, init_date, fname)
 
             # Create a mini-dataframe:
@@ -49,13 +49,14 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     
     return fcst_data
     
-# function to calculate the DMB ratio
+# function to calculate the DMB ratiomend
 def dmb_calc(df):
     return sum (df.Qout) / sum (df.Obs)
 
 # %% Initialization of variables
-rt_dir          = r"D:\Masters\Thesis\Test_downloads"
-obs_dir         = r"D:\Masters\Thesis\reanalysis_data"
+# rt_dir          = r"/Users/akadel/Documents/Kadel/Thesis/Fcst_data"
+rt_dir          = r"../Fcst_data"
+obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
 init_date_list  = pd.date_range(start='20140101', end='20140105').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
@@ -66,7 +67,7 @@ riv_id          = 54302
 day             = 2
 
 ## ************************************** ##
-## Build calibration dataframe ##
+## Build dataframe of raw forecasts
 ##
 
 # %% Loop through all the files and create a dataframe:
@@ -79,7 +80,7 @@ fcst_data.tail()
 
 # %% 
 ## ************************************** ##
-## Calculate bias correction ratio ##
+## Load the observation ##
 ## !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ##
 
 # %% Load observation:
