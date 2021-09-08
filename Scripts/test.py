@@ -58,13 +58,14 @@ def dmb_calc(df):
 rt_dir          = r"../Fcst_data"
 obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
-init_date_list  = pd.date_range(start='20140101', end='20140105').strftime("%Y%m%d").values
+init_date_list  = pd.date_range(start='20140101', end='20140110').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
 # river ids for Naugad in different renditions:
 # riv_id    = 25681
 riv_id          = 54302
 # forecast day of interest:
 day             = 2
+window          = 5
 
 ## ************************************** ##
 ## Build dataframe of raw forecasts
@@ -73,11 +74,6 @@ day             = 2
 # %% Loop through all the files and create a dataframe:
 fcst_data = df_creator(rt_dir, init_date_list, riv_id, ens_members)
 
-# %% Check the head of data:
-fcst_data.head()
-# %% Check the tail of data:
-fcst_data.tail()
-
 # %% 
 ## ************************************** ##
 ## Load the observation ##
@@ -85,7 +81,7 @@ fcst_data.tail()
 
 # %% Load observation:
 # make the data compatible with the fcst dataframe format
-obs = pd.read_csv(os.path.join(rt_dir, "Naugad.csv"))
+obs = pd.read_csv(os.path.join(obs_dir, "Naugad.csv"))
 obs.set_index("Dates", inplace = True)
 obs.index.names = ['date']
 obs.index   = obs.index.map(lambda x:x.split()[0])
@@ -97,78 +93,23 @@ obs.columns = ["Obs"]
 # perform a left join with fcsts being the left parameter:
 
 t1 = pd.merge(fcst_data.xs(key = day, level = "day_no")[["Qout","init_date"]],
-                obs, left_index=True, right_index=True)
+                obs, left_index=True, right_index=True).sort_index()
+
+# %%
 # calculate the DMB for the calibration year
+# assign creates a new column called DMBn using results from dmb_calc. 
 t1 = (t1.groupby(by = "ens_mem").
         apply(lambda x: x.assign( DMBn = dmb_calc ) )
         ).sort_index()
 
-# %% Set up verification data:
-# set verification dates to be 1 year after the calibration date:
-verif_date_list = pd.to_datetime(init_date_list).shift(365, freq = "d").strftime("%Y%m%d").values
-verif_data      = df_creator(rt_dir, verif_date_list, riv_id, ens_members)
-verif_data = verif_data.xs(key = day, level = "day_no")[["Qout","init_date"]].sort_index()
-verif_data = pd.merge(verif_data, obs, left_index=True, right_index=True)
+# %% Check the head of data:
+t1.head()
+# %% Check the tail of data:
+t1.tail()
+# %% test cell
+def dmb_test(df):
+    return df.Qout.rolling(2).sum().values / df.Obs.rolling(2).sum().values
 
-# %%
-test        = t1[["DMBn"]]
-test.index  = test.index.set_levels(test.index.levels[1].shift(365, freq = "d"), 
-                level = 1) 
+test = t1.xs(key = 52, level = "ens_mem")
+test["DMB"] = test.apply(lambda x:dmb_test(x))
 
-# %%
-test = pd.merge(verif_data, test, left_index=True, right_index=True)
-test["Q_bc"] = test.Qout / test.DMBn
-
-# %% reorder columns
-# cols = list(test)
-# cols[0], cols[1] = cols[1] , cols[0]
-# t1 = t1.loc[:,cols]
-
-# %% Reset all the indices
-# reset index:
-df = (test.reset_index().sort_index())
-df
-
-# %% prepare plot
-fig, ax = plt.subplots(2,1, sharex=True, sharey=True)
-fig.suptitle("day 2 forecasts initialised for different dates for 2014 January", 
-            y = 0.96 )
-fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
-            fontsize = "large")
-fig.subplots_adjust(left = 0.12, hspace = 0.3)
-
-sn.set(style = "darkgrid")
-# plot the high-resolution forecast:
-p1 = sn.scatterplot(x = "init_date", y = "Qout", data = df[df["ens_mem"] == 52], 
-                color = "black", ax = ax[0], label = "high-res", legend = False)
-sn.scatterplot(x = "init_date", y = "Q_bc", data = df[df["ens_mem"] == 52], 
-                color = "black", ax = ax[1])
-# plot the observations:
-ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
-ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
-
-# plot raw forecasts
-sn.violinplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
-                color = "skyblue", width = 0.5 , linewidth = 2)
-# plot bias corrected forecasts:
-sn.boxplot(x = "init_date", y = "Q_bc", data = df, ax = ax[1], 
-                color = "skyblue", width = 0.5)
-
-# aesthetic changes:
-ax[0].set_xlabel("")
-ax[0].set_ylabel("")
-ax[1].set_ylabel("")
-ax[1].set_xlabel("initial date")
-ax[0].set_title("Raw forecasts")
-ax[1].set_title("bias corrected forecasts")
-
-# add a legend:
-fig.legend(loc = "center right",
-            title = "Legend")
-
-plt.show()
-
-# %%
-# df.loc[lambda x : ( x["ens_mem"] == 1 ) | ( x["ens_mem"] == 2 ), :]
-
-# %%
