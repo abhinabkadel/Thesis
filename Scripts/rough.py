@@ -73,3 +73,5 @@ def dmb_test(df):
     df.Qout.rolling(2).sum().values / df.Obs.rolling(2).sum().values
 
 test.rolling(2).apply(lambda x: x.assign(DMBn = dmb_test))
+
+test = t1.loc[ pd.IndexSlice[ [1,52],:], :]

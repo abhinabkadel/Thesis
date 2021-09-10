@@ -50,11 +50,12 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     return fcst_data
     
 # function to calculate the DMB ratiomend
-def dmb_calc(df):
-    return sum (df.Qout) / sum (df.Obs)
+def dmb_calc(df, window):
+    return df.Qout.rolling(window).sum().values / df.Obs.rolling(window).sum().values
 
 # %% Initialization of variables
-# rt_dir          = r"/Users/akadel/Documents/Kadel/Thesis/Fcst_data"
+# rt_dir          = r"./Fcst_data"
+# obs_dir         = r"./reanalysis_data"
 rt_dir          = r"../Fcst_data"
 obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
@@ -65,7 +66,7 @@ ens_members     = [*range(1, 5), 52]
 riv_id          = 54302
 # forecast day of interest:
 day             = 2
-window          = 5
+win_len         = 5
 
 ## ************************************** ##
 ## Build dataframe of raw forecasts
@@ -91,25 +92,22 @@ obs.columns = ["Obs"]
 
 # %% try merging the forecasts and the observations datasets together. 
 # perform a left join with fcsts being the left parameter:
-
 t1 = pd.merge(fcst_data.xs(key = day, level = "day_no")[["Qout","init_date"]],
                 obs, left_index=True, right_index=True).sort_index()
 
 # %%
 # calculate the DMB for the calibration year
 # assign creates a new column called DMBn using results from dmb_calc. 
-t1 = (t1.groupby(by = "ens_mem").
-        apply(lambda x: x.assign( DMBn = dmb_calc ) )
-        ).sort_index()
+t1["DMB"] = dmb_calc(t1.groupby(by = "ens_mem"), window = win_len)
+t1.sort_index()
 
 # %% Check the head of data:
 t1.head()
 # %% Check the tail of data:
 t1.tail()
-# %% test cell
-def dmb_test(df):
-    return df.Qout.rolling(2).sum().values / df.Obs.rolling(2).sum().values
 
-test = t1.xs(key = 52, level = "ens_mem")
-test["DMB"] = test.apply(lambda x:dmb_test(x))
+# Apply these DMB on future forecasts
+# next step to figure out how to calculate the bias corrected results 
+# see if a combination of shift can be used 
+# or maybe apply. 
 
