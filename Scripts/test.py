@@ -3,12 +3,11 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import datetime as dt
-import matplotlib.dates as mdates  
-import matplotlib.pyplot as plt
 import seaborn as sn
 import os 
 
 #%% Defined functions:
+# create single database from 52 ens. mems. across given time period:
 def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     fcst_data = []
     for init_date in init_date_list:
@@ -49,15 +48,19 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     
     return fcst_data
     
-# function to calculate the DMB ratiomend
+# function to calculate the DMB ratio:
 def dmb_calc(df, window):
     return df.Qout.rolling(window).sum().values / df.Obs.rolling(window).sum().values
 
+# create bias-corrected forecasts:
+def Q_bc(df):
+    df["Q_bc"] =  df.Qout.values / df.DMB.shift(periods=1).values
+
 # %% Initialization of variables
-# rt_dir          = r"./Fcst_data"
-# obs_dir         = r"./reanalysis_data"
-rt_dir          = r"../Fcst_data"
-obs_dir         = r"../reanalysis_data"
+rt_dir          = r"./Fcst_data"
+obs_dir         = r"./reanalysis_data"
+# rt_dir          = r"../Fcst_data"
+# obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
 init_date_list  = pd.date_range(start='20140101', end='20140110').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
@@ -95,19 +98,17 @@ obs.columns = ["Obs"]
 t1 = pd.merge(fcst_data.xs(key = day, level = "day_no")[["Qout","init_date"]],
                 obs, left_index=True, right_index=True).sort_index()
 
+# %% DMB calculation and tomorrow's day n fcst calibration
+t1["DMB"] = dmb_calc(t1.groupby(by = "ens_mem", dropna = False), window = win_len)
+
 # %%
-# calculate the DMB for the calibration year
-# assign creates a new column called DMBn using results from dmb_calc. 
-t1["DMB"] = dmb_calc(t1.groupby(by = "ens_mem"), window = win_len)
-t1.sort_index()
+# new columns not being added
+
+test = t1.groupby(by = "ens_mem", dropna = False).apply(Q_bc).sort_index()
 
 # %% Check the head of data:
 t1.head()
 # %% Check the tail of data:
 t1.tail()
 
-# Apply these DMB on future forecasts
-# next step to figure out how to calculate the bias corrected results 
-# see if a combination of shift can be used 
-# or maybe apply. 
-
+# %%
