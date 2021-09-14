@@ -53,14 +53,13 @@ def dmb_calc(df, window):
     return df.Qout.rolling(window).sum().values / df.Obs.rolling(window).sum().values
 
 # create bias-corrected forecasts:
-def Q_bc(df):
-    df["Q_bc"] =  df.Qout.values / df.DMB.shift(periods=1).values
+
 
 # %% Initialization of variables
-rt_dir          = r"./Fcst_data"
-obs_dir         = r"./reanalysis_data"
-# rt_dir          = r"../Fcst_data"
-# obs_dir         = r"../reanalysis_data"
+# rt_dir          = r"./Fcst_data"
+# obs_dir         = r"./reanalysis_data"
+rt_dir          = r"../Fcst_data"
+obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
 init_date_list  = pd.date_range(start='20140101', end='20140110').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
@@ -102,9 +101,12 @@ t1 = pd.merge(fcst_data.xs(key = day, level = "day_no")[["Qout","init_date"]],
 t1["DMB"] = dmb_calc(t1.groupby(by = "ens_mem", dropna = False), window = win_len)
 
 # %%
-# new columns not being added
+# new columns not being added 
+t1 = t1.groupby(by = "ens_mem", dropna = False).     \
+     apply(lambda df:df.assign(
+         Q_bc = df["Qout"].values / df["DMB"].shift(periods=1).values )
+         ).sort_index()
 
-test = t1.groupby(by = "ens_mem", dropna = False).apply(Q_bc).sort_index()
 
 # %% Check the head of data:
 t1.head()
