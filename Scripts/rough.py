@@ -25,43 +25,6 @@ df = (test.reset_index().sort_index())
 df
 
 # %% prepare plot
-fig, ax = plt.subplots(2,1, sharex=True, sharey=True)
-fig.suptitle("day 2 forecasts initialised for different dates for 2014 January", 
-            y = 0.96 )
-fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
-            fontsize = "large")
-fig.subplots_adjust(left = 0.12, hspace = 0.3)
-
-sn.set(style = "darkgrid")
-# plot the high-resolution forecast:
-p1 = sn.scatterplot(x = "init_date", y = "Qout", data = df[df["ens_mem"] == 52], 
-                color = "black", ax = ax[0], label = "high-res", legend = False)
-sn.scatterplot(x = "init_date", y = "Q_bc", data = df[df["ens_mem"] == 52], 
-                color = "black", ax = ax[1])
-# plot the observations:
-ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
-ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
-
-# plot raw forecasts
-sn.violinplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
-                color = "skyblue", width = 0.5 , linewidth = 2)
-# plot bias corrected forecasts:
-sn.boxplot(x = "init_date", y = "Q_bc", data = df, ax = ax[1], 
-                color = "skyblue", width = 0.5)
-
-# aesthetic changes:
-ax[0].set_xlabel("")
-ax[0].set_ylabel("")
-ax[1].set_ylabel("")
-ax[1].set_xlabel("initial date")
-ax[0].set_title("Raw forecasts")
-ax[1].set_title("bias corrected forecasts")
-
-# add a legend:
-fig.legend(loc = "center right",
-            title = "Legend")
-
-plt.show()
 
 # %%
 # df.loc[lambda x : ( x["ens_mem"] == 1 ) | ( x["ens_mem"] == 2 ), :]

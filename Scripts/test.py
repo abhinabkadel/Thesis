@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import seaborn as sn
+import matplotlib.pyplot as plt
 import os 
 
 #%% Defined functions:
@@ -47,7 +48,23 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     fcst_data = fcst_data.reorder_levels(["ens_mem", "day_no", "date"])
     
     return fcst_data
-    
+
+def add_obs(place, obs_dir, day, fcst_df):
+    # Load the observations csv file and load the dataframe
+    # make the data compatible with the fcst dataframe format
+    obs = pd.read_csv( os.path.join(obs_dir, place+".csv"), 
+            names = ["date", "Obs"], header=0, parse_dates=[0], 
+            infer_datetime_format=True, index_col = [0])
+
+
+    # merge the forecasts and the observations datasets together. 
+    # perform a left join with fcsts being the left parameter:
+    df = pd.merge( fcst_df.xs(key = day, level = "day_no")
+                    [["Qout","init_date"]],
+                    obs, left_index=True, 
+                    right_index=True).sort_index()
+    return df
+
 # function to calculate the DMB ratio:
 def dmb_calc(df, window, weight = False):
     if weight == True:
@@ -71,14 +88,32 @@ def dmb_calc(df, window, weight = False):
         return df.Qout.rolling(window).sum().values / df.Obs.rolling(window).sum().values
 
 # create bias-corrected forecasts:
-# ANOTHER FUNCTION HERE?
+def bc_fcsts(df, win_len):     
+    # Calculate DMB ratio:
+    # un-weighted:
+    df["DMB"] = dmb_calc(df.groupby(by = "ens_mem", dropna = False), window = win_len)
+    # weighted DMB:
+    df = df.groupby(by = "ens_mem").apply(lambda x:dmb_calc(x, window = win_len, weight =  True))
 
+    # APPLY BIAS CORRECTION FACTOR:
+    # new column for un-weighted DMB bias correction: 
+    df = df.groupby(by = "ens_mem", dropna = False).     \
+        apply(lambda df:df.assign(
+            Q_dmb = df["Qout"].values / df["DMB"].shift(periods=1).values )
+            ).sort_index()
+    # new column for weighted DMB bias correction:
+    df = df.groupby(by = "ens_mem", dropna = False).     \
+        apply(lambda df:df.assign(
+            Q_ldmb = df["Qout"].values / df["LDMB"].shift(periods=1).values )
+            ).sort_index()
+
+    return df
 
 # %% Initialization of variables
-rt_dir          = r"./Fcst_data"
-obs_dir         = r"./reanalysis_data"
-# rt_dir          = r"../Fcst_data"
-# obs_dir         = r"../reanalysis_data"
+# rt_dir          = r"./Fcst_data"
+# obs_dir         = r"./reanalysis_data"
+rt_dir          = r"../Fcst_data"
+obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
 init_date_list  = pd.date_range(start='20140101', end='20140110').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
@@ -89,54 +124,52 @@ riv_id          = 54302
 day             = 2
 win_len         = 5
 
-## ************************************** ##
-## Build dataframe of raw forecasts
-##
-
-
 # %% Loop through all the files and create a dataframe:
 fcst_data = df_creator(rt_dir, init_date_list, riv_id, ens_members)
 
-# %% 
-## ************************************** ##
-## Load the observation ##
-## !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ##
+# %% Add observations:
+fcst_data = add_obs(place = "Naugad", fcst_df = fcst_data, 
+                obs_dir = obs_dir, day = day)
 
-# %% Load observation:
-# make the data compatible with the fcst dataframe format
-obs = pd.read_csv(os.path.join(obs_dir, "Naugad.csv"))
-obs.set_index("Dates", inplace = True)
-obs.index.names = ['date']
-obs.index       = obs.index.map(lambda x:x.split()[0])
-obs.index       = pd.to_datetime(obs.index, format = "%d/%m/%Y")
-obs_range       = obs.loc[pd.date_range("20140101", "20150131")]
-obs.columns     = ["Obs"]
+# %% Bias correct the forecasts using DMB and LDMB
+t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
-# %% try merging the forecasts and the observations datasets together. 
-# perform a left join with fcsts being the left parameter:
-t1 = pd.merge(fcst_data.xs(key = day, level = "day_no")[["Qout","init_date"]],
-                obs, left_index=True, right_index=True).sort_index()
+# %% Add plotting functions
+df = t1
+fig, ax = plt.subplots(2,1, sharex=True, sharey=True)
+fig.suptitle("day 2 forecasts initialised for different dates for 2014 January", 
+            y = 0.96 )
+fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
+            fontsize = "large")
+fig.subplots_adjust(left = 0.12, hspace = 0.3)
 
-# %% DMB calculation and tomorrow's day n fcst calibration
-t1["DMB"] = dmb_calc(t1.groupby(by = "ens_mem", dropna = False), window = win_len)
-# implement weighted DMB:
-t1 = t1.groupby(by = "ens_mem").apply(lambda x:dmb_calc(x, window = win_len, weight =  True))
+sn.set(style = "darkgrid")
+# plot the high-resolution forecast:
+p1 = sn.scatterplot(x = "init_date", y = "Qout", data = df[df["ens_mem"] == 52], 
+                color = "black", ax = ax[0], label = "high-res", legend = False)
+sn.scatterplot(x = "init_date", y = "Q_bc", data = df[df["ens_mem"] == 52], 
+                color = "black", ax = ax[1])
+# plot the observations:
+ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
+ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
 
-# %%
-# new columns not being added 
-t1 = t1.groupby(by = "ens_mem", dropna = False).     \
-     apply(lambda df:df.assign(
-         Q_dmb = df["Qout"].values / df["DMB"].shift(periods=1).values )
-         ).sort_index()
+# plot raw forecasts
+sn.violinplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
+                color = "skyblue", width = 0.5 , linewidth = 2)
+# plot bias corrected forecasts:
+sn.boxplot(x = "init_date", y = "Q_bc", data = df, ax = ax[1], 
+                color = "skyblue", width = 0.5)
 
-t1 = t1.groupby(by = "ens_mem", dropna = False).     \
-     apply(lambda df:df.assign(
-         Q_ldmb = df["Qout"].values / df["LDMB"].shift(periods=1).values )
-         ).sort_index()
+# aesthetic changes:
+ax[0].set_xlabel("")
+ax[0].set_ylabel("")
+ax[1].set_ylabel("")
+ax[1].set_xlabel("initial date")
+ax[0].set_title("Raw forecasts")
+ax[1].set_title("bias corrected forecasts")
 
-# %% Check the head of data:
-t1.head()
-# %% Check the tail of data:
-t1.tail()
+# add a legend:
+fig.legend(loc = "center right",
+            title = "Legend")
 
-# %%
+plt.show()
