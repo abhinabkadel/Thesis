@@ -110,19 +110,19 @@ def bc_fcsts(df, win_len):
     return df
 
 # %% Initialization of variables
-rt_dir          = r"./Fcst_data"
-obs_dir         = r"./reanalysis_data"
-# rt_dir          = r"../Fcst_data"
-# obs_dir         = r"../reanalysis_data"
+# rt_dir          = r"./Fcst_data"
+# obs_dir         = r"./reanalysis_data"
+rt_dir          = r"../Fcst_data"
+obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
-init_date_list  = pd.date_range(start='20140101', end='20140131').strftime("%Y%m%d").values
+init_date_list  = pd.date_range(start='20140901', end='20140930').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
 # river ids for Naugad in different renditions:
 # riv_id    = 25681
 riv_id          = 54302
 # forecast day of interest:
 day             = 2
-win_len         = 5
+win_len         = 7
 
 # %% Loop through all the files and create a dataframe:
 fcst_data = df_creator(rt_dir, init_date_list, riv_id, ens_members)
@@ -136,7 +136,7 @@ t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
 # %% Add plotting functions
 df = t1
-fig, ax = plt.subplots(3,1, sharex=True, sharey=True)
+fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
 fig.suptitle("Raw and bias corrected streamflow forecasts" +
         f"\n site = {site}, day = {day}, window = {win_len}", 
             y = 0.96 )
@@ -160,15 +160,14 @@ ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
 ax[2].plot(df.groupby("init_date")['Obs'].mean(), "ro")
 
 # plot raw forecasts
-sn.violinplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
+sn.boxplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
                 color = "skyblue", width = 0.75 , linewidth = 2)
 # plot un-weighted bias corrected forecasts:
-sn.violinplot(x = "init_date", y = "Q_dmb", data = df, ax = ax[1], 
+sn.boxplot(x = "init_date", y = "Q_dmb", data = df, ax = ax[1], 
                 color = "skyblue", width = 0.75)
 # plot linearly weighted bias corrected forecasts:
-sn.violinplot(x = "init_date", y = "Q_ldmb", data = df, ax = ax[2], 
-                color = "skyblue", width = 0.75, 
-                plot_kws = {'alpha': 0.3})
+sn.boxplot(x = "init_date", y = "Q_ldmb", data = df, ax = ax[2], 
+                color = "skyblue", width = 0.75)
 
 # aesthetic changes:
 ax[0].set_xlabel("")
