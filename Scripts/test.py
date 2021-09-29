@@ -110,12 +110,12 @@ def bc_fcsts(df, win_len):
     return df
 
 # %% Initialization of variables
-# rt_dir          = r"./Fcst_data"
-# obs_dir         = r"./reanalysis_data"
-rt_dir          = r"../Fcst_data"
-obs_dir         = r"../reanalysis_data"
+rt_dir          = r"./Fcst_data"
+obs_dir         = r"./reanalysis_data"
+# rt_dir          = r"../Fcst_data"
+# obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
-init_date_list  = pd.date_range(start='20140901', end='20140930').strftime("%Y%m%d").values
+init_date_list  = pd.date_range(start='20140601', end='20140630').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
 # river ids for Naugad in different renditions:
 # riv_id    = 25681
@@ -137,13 +137,15 @@ t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 # %% Add plotting functions
 df = t1
 fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
+plt.rcParams['font.size'] = 15
+plt.xticks(fontsize = 12)
 fig.suptitle("Raw and bias corrected streamflow forecasts" +
         f"\n site = {site}, day = {day}, window = {win_len}", 
-            y = 0.96 )
+            y = 0.985 )
 
 fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
             fontsize = "large")
-fig.subplots_adjust(left = 0.12, hspace = 0.3)
+fig.subplots_adjust(left = 0.1, hspace = 0.22, top = 0.89, bottom = 0.15)
 
 sn.set(style = "darkgrid")
 # plot the high-resolution forecast:
@@ -175,13 +177,13 @@ ax[0].set_ylabel("")
 ax[1].set_xlabel("")
 ax[1].set_ylabel("")
 ax[2].set_ylabel("")
-ax[2].set_xlabel("initial date")
-ax[0].set_title("Raw forecasts")
-ax[1].set_title("un-weighted DMB")
-ax[2].set_title("linearly weighted DMB")
+ax[2].set_xlabel("initial date", fontsize = 15, labelpad = 5)
+ax[0].set_title("Raw forecasts", fontsize = 15)
+ax[1].set_title("un-weighted DMB", fontsize = 15)
+ax[2].set_title("linearly weighted DMB", fontsize = 15)
 
 # add a legend:
-fig.legend(loc = "center right",
+fig.legend(loc = "upper left",
             title = "Legend")
 plt.xticks(rotation = 90)
 plt.show()
