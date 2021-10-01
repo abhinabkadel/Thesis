@@ -6,6 +6,7 @@ import datetime as dt
 import seaborn as sn
 import matplotlib.pyplot as plt
 import os 
+import plotly.express as px
 
 #%% Defined functions:
 # create single database from 52 ens. mems. across given time period:
@@ -128,64 +129,120 @@ win_len         = 7
 fcst_data = df_creator(rt_dir, init_date_list, riv_id, ens_members)
 
 # %% Add observations:
-fcst_data = add_obs(place = "Naugad", fcst_df = fcst_data, 
+fcst_data = add_obs(place = "5013430", fcst_df = fcst_data, 
                 obs_dir = obs_dir, day = day)
 
 # %% Bias correct the forecasts using DMB and LDMB
 t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
 # %% Add plotting functions
-df = t1
-fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
-plt.rcParams['font.size'] = 15
-plt.xticks(fontsize = 12)
-fig.suptitle("Raw and bias corrected streamflow forecasts" +
-        f"\n site = {site}, day = {day}, window = {win_len}", 
-            y = 0.985 )
+df = t1.reset_index()
+# fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
+# plt.rcParams['font.size'] = 15
+# plt.xticks(fontsize = 12)
+# fig.suptitle("Raw and bias corrected streamflow forecasts" +
+#         f"\n site = {site}, day = {day}, window = {win_len}", 
+#             y = 0.985 )
 
-fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
-            fontsize = "large")
-fig.subplots_adjust(left = 0.1, hspace = 0.22, top = 0.89, bottom = 0.15)
+# fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
+#             fontsize = "large")
+# fig.subplots_adjust(left = 0.1, hspace = 0.22, top = 0.89, bottom = 0.15)
 
-sn.set(style = "darkgrid")
-# plot the high-resolution forecast:
-sn.lineplot(x = "init_date", y = "Qout", data = df.xs(key = 52, level = "ens_mem"), 
-                color = "black", ax = ax[0], label = "high-res", legend = False)
-sn.lineplot(x = "init_date", y = "Q_dmb", data = df.xs(key = 52, level = "ens_mem"), 
-                color = "black", ax = ax[1])
-sn.lineplot(x = "init_date", y = "Q_ldmb", data = df.xs(key = 52, level = "ens_mem"), 
-                color = "black", ax = ax[2])                
+# sn.set(style = "darkgrid")
+# # plot the high-resolution forecast:
+# sn.lineplot(x = "init_date", y = "Qout", data = df.xs(key = 52, level = "ens_mem"), 
+#                 color = "black", ax = ax[0], label = "high-res", legend = False)
+# sn.lineplot(x = "init_date", y = "Q_dmb", data = df.xs(key = 52, level = "ens_mem"), 
+#                 color = "black", ax = ax[1])
+# sn.lineplot(x = "init_date", y = "Q_ldmb", data = df.xs(key = 52, level = "ens_mem"), 
+#                 color = "black", ax = ax[2])                
 
-# plot the observations:
-ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
-ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
-ax[2].plot(df.groupby("init_date")['Obs'].mean(), "ro")
+# # plot the observations:
+# ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
+# ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
+# ax[2].plot(df.groupby("init_date")['Obs'].mean(), "ro")
 
-# plot raw forecasts
-sn.boxplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
-                color = "skyblue", width = 0.75 , linewidth = 2)
+# # plot raw forecasts
+# sn.boxplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
+#                 color = "skyblue", width = 0.75 , linewidth = 2)
+# # plot un-weighted bias corrected forecasts:
+# sn.boxplot(x = "init_date", y = "Q_dmb", data = df, ax = ax[1], 
+#                 color = "skyblue", width = 0.75)
+# # plot linearly weighted bias corrected forecasts:
+# sn.boxplot(x = "init_date", y = "Q_ldmb", data = df, ax = ax[2], 
+#                 color = "skyblue", width = 0.75)
+
+# # aesthetic changes:
+# ax[0].set_xlabel("")
+# ax[0].set_ylabel("")
+# ax[1].set_xlabel("")
+# ax[1].set_ylabel("")
+# ax[2].set_ylabel("")
+# ax[2].set_xlabel("initial date", fontsize = 15, labelpad = 5)
+# ax[0].set_title("Raw forecasts", fontsize = 15)
+# ax[1].set_title("un-weighted DMB", fontsize = 15)
+# ax[2].set_title("linearly weighted DMB", fontsize = 15)
+
+# # add a legend:
+# fig.legend(loc = "upper left",
+#             title = "Legend")
+# plt.xticks(rotation = 90)
+# plt.show()
+
+# %%
+# fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
+# plt.rcParams['font.size'] = 15
+# plt.xticks(fontsize = 12)
+# fig.suptitle("Raw and bias corrected streamflow forecasts" +
+#         f"\n site = {site}, day = {day}, window = {win_len}", 
+#             y = 0.985 )
+
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+fig = make_subplots(rows = 3, cols = 1,
+                    shared_xaxes = True,
+                    vertical_spacing = 0.05)
+# plot raw forecasts:
+fig.append_trace(
+        go.Box(x = df["date"], y=df["Qout"]), 
+        row = 1, col = 1
+    )
 # plot un-weighted bias corrected forecasts:
-sn.boxplot(x = "init_date", y = "Q_dmb", data = df, ax = ax[1], 
-                color = "skyblue", width = 0.75)
+fig.append_trace(
+        go.Box(x = df["date"], y=df["Q_dmb"]), row = 2, col = 1
+    )
 # plot linearly weighted bias corrected forecasts:
-sn.boxplot(x = "init_date", y = "Q_ldmb", data = df, ax = ax[2], 
-                color = "skyblue", width = 0.75)
+fig.append_trace(
+        go.Box(x = df["date"], y=df["Q_ldmb"]), row = 3, col = 1
+    )
+# plot high-res
+fig.append_trace( 
+    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
+               y = df[df["ens_mem"] == 52]["Qout"],
+               name = "high res raw", line = {"color":"blue"} ),
+    row = 1, col = 1
+    )
+# plot high-res dmb
+fig.append_trace( 
+    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
+               y = df[df["ens_mem"] == 52]["Q_dmb"],
+               name = "high res DMB", line = {"color":"blue"} ),
+    row = 2, col = 1
+    )
+# plot high-res linearly-weighted
+fig.append_trace( 
+    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
+               y = df[df["ens_mem"] == 52]["Q_ldmb"],
+               name = "high res LDMB", line = {"color":"blue"} ),
+    row = 3, col = 1
+    )
+# plot observations
+fig.append_trace(
+        go.Scatter(x = df["date"], y=df["Obs"]), row = [1,2,3], col = 1
+    )
 
-# aesthetic changes:
-ax[0].set_xlabel("")
-ax[0].set_ylabel("")
-ax[1].set_xlabel("")
-ax[1].set_ylabel("")
-ax[2].set_ylabel("")
-ax[2].set_xlabel("initial date", fontsize = 15, labelpad = 5)
-ax[0].set_title("Raw forecasts", fontsize = 15)
-ax[1].set_title("un-weighted DMB", fontsize = 15)
-ax[2].set_title("linearly weighted DMB", fontsize = 15)
-
-# add a legend:
-fig.legend(loc = "upper left",
-            title = "Legend")
-plt.xticks(rotation = 90)
-plt.show()
+# fig.append_trace()
+fig.show()
 
 # %%
