@@ -111,10 +111,12 @@ def bc_fcsts(df, win_len):
     return df
 
 # %% Initialization of variables
-rt_dir          = r"./Fcst_data"
-obs_dir         = r"./reanalysis_data"
-# rt_dir          = r"../Fcst_data"
-# obs_dir         = r"../reanalysis_data"
+# for terminal mode:
+# rt_dir          = r"./Fcst_data"
+# obs_dir         = r"./reanalysis_data"
+# for interactive mode:
+rt_dir          = r"../Fcst_data"
+obs_dir         = r"../reanalysis_data"
 site            = "Naugad"
 init_date_list  = pd.date_range(start='20140601', end='20140630').strftime("%Y%m%d").values
 ens_members     = [*range(1, 5), 52]
@@ -205,16 +207,18 @@ fig = make_subplots(rows = 3, cols = 1,
                     vertical_spacing = 0.05)
 # plot raw forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Qout"]), 
+        go.Box(x = df["date"], y=df["Qout"], line = {"color":"rosybrown"}), 
         row = 1, col = 1
     )
 # plot un-weighted bias corrected forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_dmb"]), row = 2, col = 1
+        go.Box(x = df["date"], y=df["Q_dmb"], line = {"color":"rosybrown"}), 
+        row = 2, col = 1
     )
 # plot linearly weighted bias corrected forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_ldmb"]), row = 3, col = 1
+        go.Box(x = df["date"], y=df["Q_ldmb"], line = {"color":"rosybrown"}), 
+        row = 3, col = 1
     )
 # plot high-res
 fig.append_trace( 
@@ -238,11 +242,20 @@ fig.append_trace(
     row = 3, col = 1
     )
 # plot observations
-fig.append_trace(
-        go.Scatter(x = df["date"], y=df["Obs"]), row = [1,2,3], col = 1
-    )
+for i in [1,2,3]:
+    fig.append_trace(
+            go.Scatter(x = df["date"], y=df["Obs"], line = {"color":"red"},
+            mode = "markers"
+            ), 
+        row = i, col = 1
+        )
+
+# things to do:
+# - show only 1 obs related legend entry
+# - axes names
+# - subplot title
 
 # fig.append_trace()
-fig.show()
+fig.show(renderer = "iframe")
 
 # %%
