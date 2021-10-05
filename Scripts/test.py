@@ -204,7 +204,12 @@ import plotly.graph_objects as go
 
 fig = make_subplots(rows = 3, cols = 1,
                     shared_xaxes = True,
-                    vertical_spacing = 0.05)
+                    shared_yaxes = True,
+                    vertical_spacing = 0.09,
+                    subplot_titles=("Raw", "DMB", "LDMB"),
+                    x_title = "date",
+                    y_title = "River discharge (m3/s)"    
+                    )
 # plot raw forecasts:
 fig.append_trace(
         go.Box(x = df["date"], y=df["Qout"], line = {"color":"rosybrown"}), 
@@ -224,21 +229,24 @@ fig.append_trace(
 fig.append_trace( 
     go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
                y = df[df["ens_mem"] == 52]["Qout"],
-               name = "high res raw", line = {"color":"blue"} ),
+               name = "high res", line = {"color":"blue"},
+               legendgroup = "high-res"),
     row = 1, col = 1
     )
 # plot high-res dmb
 fig.append_trace( 
     go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
                y = df[df["ens_mem"] == 52]["Q_dmb"],
-               name = "high res DMB", line = {"color":"blue"} ),
+               name = "high res DMB", line = {"color":"blue"},
+               legendgroup = "high-res", showlegend = False),
     row = 2, col = 1
     )
 # plot high-res linearly-weighted
 fig.append_trace( 
     go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
                y = df[df["ens_mem"] == 52]["Q_ldmb"],
-               name = "high res LDMB", line = {"color":"blue"} ),
+               name = "high res LDMB", line = {"color":"blue"},
+               legendgroup = "high-res", showlegend = False),
     row = 3, col = 1
     )
 # plot observations
@@ -249,6 +257,8 @@ for i in [1,2,3]:
             ), 
         row = i, col = 1
         )
+# axes names:
+
 
 # things to do:
 # - show only 1 obs related legend entry
@@ -256,6 +266,7 @@ for i in [1,2,3]:
 # - subplot title
 
 # fig.append_trace()
-fig.show(renderer = "iframe")
+fig.show()
+# fig.show(renderer = "iframe")
 
 # %%
