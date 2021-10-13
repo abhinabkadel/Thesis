@@ -30,10 +30,10 @@ def Nepal_extractor(Q_file, npl):
 
 # %%
 src_rt      = r"wfrt:/reforecasts-2/"
-src_dir     = pd.date_range(start='20160101', end='20161231').strftime("%Y%m%d.%H").values
+src_dir     = pd.date_range(start='20160223', end='20191231').strftime("%Y%m%d.%H").values
 dst_rt      = "/Users/akadel/Documents/Kadel/Thesis/Fcst_data"
 # rclone_cmd  = "rclone copy --verbose --update --progress --dry-run "
-mappath 	= "/Users/akadel/Documents/Kadel/Thesis/Nepal-boundary/data/Outline.shp"
+mappath 	= "./GIS_data/Nepal-GIS_files/Nepal-boundary/data/Outline.shp"
 rclone_cmd  = "rclone copy --verbose --update --progress "
 
 # %% load the shapefile for map of Nepal
