@@ -3,10 +3,15 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import datetime as dt
-import seaborn as sn
-import matplotlib.pyplot as plt
 import os 
-import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+# changes made:
+#   df_creator: file name changed
+#   riv_id: changed
+
+# to do:
+# replace nan with 0
 
 #%% Defined functions:
 # create single database from 52 ens. mems. across given time period:
@@ -14,7 +19,11 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     fcst_data = []
     for init_date in init_date_list:
         for i in ens_members:
-            fname       = f"Qout_npl_{i:d}.nc"
+            # for ICIMOD archives:
+            fname       = f"Qout_npl_geoglowsn_{i:d}.nc"
+            # for Jorge's data:
+            # fname       = f"Qout_npl_{i:d}.nc"
+            
             file_pth    = os.path.join(rt_dir, init_date, fname)
 
             # Create a mini-dataframe:
@@ -117,12 +126,19 @@ def bc_fcsts(df, win_len):
 # for interactive mode:
 rt_dir          = r"../Fcst_data"
 obs_dir         = r"../reanalysis_data"
-site            = "Naugad"
-init_date_list  = pd.date_range(start='20140601', end='20140630').strftime("%Y%m%d").values
+site            = "Marsyangdi"
+site_comID      = "5020959"
+init_date_list  = np.append( 
+            pd.date_range(start='20200514', end='20200730').strftime("%Y%m%d").values,
+            pd.date_range(start='20200801', end='20201215').strftime("%Y%m%d").values 
+            )
 ens_members     = [*range(1, 5), 52]
 # river ids for Naugad in different renditions:
 # riv_id    = 25681
-riv_id          = 54302
+# riv_id          = 54302
+# river id for Marsyangdi:
+riv_id = 34580
+
 # forecast day of interest:
 day             = 2
 win_len         = 7
@@ -131,7 +147,7 @@ win_len         = 7
 fcst_data = df_creator(rt_dir, init_date_list, riv_id, ens_members)
 
 # %% Add observations:
-fcst_data = add_obs(place = "5013430", fcst_df = fcst_data, 
+fcst_data = add_obs(place = site, fcst_df = fcst_data, 
                 obs_dir = obs_dir, day = day)
 
 # %% Bias correct the forecasts using DMB and LDMB
@@ -139,90 +155,39 @@ t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
 # %% Add plotting functions
 df = t1.reset_index()
-# fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
-# plt.rcParams['font.size'] = 15
-# plt.xticks(fontsize = 12)
-# fig.suptitle("Raw and bias corrected streamflow forecasts" +
-#         f"\n site = {site}, day = {day}, window = {win_len}", 
-#             y = 0.985 )
-
-# fig.text(0.02, 0.5, "Flow ($m^3/s$)", va = "center", rotation = "vertical", 
-#             fontsize = "large")
-# fig.subplots_adjust(left = 0.1, hspace = 0.22, top = 0.89, bottom = 0.15)
-
-# sn.set(style = "darkgrid")
-# # plot the high-resolution forecast:
-# sn.lineplot(x = "init_date", y = "Qout", data = df.xs(key = 52, level = "ens_mem"), 
-#                 color = "black", ax = ax[0], label = "high-res", legend = False)
-# sn.lineplot(x = "init_date", y = "Q_dmb", data = df.xs(key = 52, level = "ens_mem"), 
-#                 color = "black", ax = ax[1])
-# sn.lineplot(x = "init_date", y = "Q_ldmb", data = df.xs(key = 52, level = "ens_mem"), 
-#                 color = "black", ax = ax[2])                
-
-# # plot the observations:
-# ax[0].plot(df.groupby("init_date")['Obs'].mean(), "ro", label = "observations")
-# ax[1].plot(df.groupby("init_date")['Obs'].mean(), "ro")
-# ax[2].plot(df.groupby("init_date")['Obs'].mean(), "ro")
-
-# # plot raw forecasts
-# sn.boxplot(x = "init_date", y = "Qout", data = df, ax = ax[0], 
-#                 color = "skyblue", width = 0.75 , linewidth = 2)
-# # plot un-weighted bias corrected forecasts:
-# sn.boxplot(x = "init_date", y = "Q_dmb", data = df, ax = ax[1], 
-#                 color = "skyblue", width = 0.75)
-# # plot linearly weighted bias corrected forecasts:
-# sn.boxplot(x = "init_date", y = "Q_ldmb", data = df, ax = ax[2], 
-#                 color = "skyblue", width = 0.75)
-
-# # aesthetic changes:
-# ax[0].set_xlabel("")
-# ax[0].set_ylabel("")
-# ax[1].set_xlabel("")
-# ax[1].set_ylabel("")
-# ax[2].set_ylabel("")
-# ax[2].set_xlabel("initial date", fontsize = 15, labelpad = 5)
-# ax[0].set_title("Raw forecasts", fontsize = 15)
-# ax[1].set_title("un-weighted DMB", fontsize = 15)
-# ax[2].set_title("linearly weighted DMB", fontsize = 15)
-
-# # add a legend:
-# fig.legend(loc = "upper left",
-#             title = "Legend")
-# plt.xticks(rotation = 90)
-# plt.show()
-
-# %%
-# fig, ax = plt.subplots(3,1, sharex=True, sharey=False)
-# plt.rcParams['font.size'] = 15
-# plt.xticks(fontsize = 12)
-# fig.suptitle("Raw and bias corrected streamflow forecasts" +
-#         f"\n site = {site}, day = {day}, window = {win_len}", 
-#             y = 0.985 )
-
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-
+# make subplot interface
 fig = make_subplots(rows = 3, cols = 1,
                     shared_xaxes = True,
                     shared_yaxes = True,
                     vertical_spacing = 0.09,
                     subplot_titles=("Raw", "DMB", "LDMB"),
                     x_title = "date",
-                    y_title = "River discharge (m3/s)"    
+                    y_title = "River discharge (<i>m<sup>3</sup>/s</i>)"    
                     )
+#                     
+fig.update_layout(
+    title_text = "Bias-correction for streamflow forecasts"+
+         f"<br> site = {site}, day = {day}, window = {win_len}",
+    title_x = 0.5,
+    legend_title = "Legend",
+    )
+
 # plot raw forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Qout"], line = {"color":"rosybrown"}), 
+        go.Box(x = df["date"], y=df["Qout"], line = {"color":"rosybrown"},
+        name = "ensemble spread", legendgroup = "ens", showlegend = True), 
         row = 1, col = 1
     )
 # plot un-weighted bias corrected forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_dmb"], line = {"color":"rosybrown"}), 
+        go.Box(x = df["date"], y=df["Q_dmb"], line = {"color":"rosybrown"},
+        legendgroup = "ens", showlegend = False), 
         row = 2, col = 1
     )
 # plot linearly weighted bias corrected forecasts:
 fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_ldmb"], line = {"color":"rosybrown"}), 
+        go.Box(x = df["date"], y=df["Q_ldmb"], line = {"color":"rosybrown"},
+        legendgroup = "ens", showlegend = False), 
         row = 3, col = 1
     )
 # plot high-res
@@ -250,23 +215,63 @@ fig.append_trace(
     row = 3, col = 1
     )
 # plot observations
-for i in [1,2,3]:
+fig.append_trace( 
+    go.Scatter(x = df["date"], y = df["Obs"], name = "observations", 
+                line = {"color":"red"}, mode = "markers", legendgroup = "obs"),
+    row = 1, col = 1
+    )
+for i in [2,3]:
     fig.append_trace(
             go.Scatter(x = df["date"], y=df["Obs"], line = {"color":"red"},
-            mode = "markers"
-            ), 
+            mode = "markers", legendgroup = "obs", showlegend = False), 
         row = i, col = 1
         )
-# axes names:
+
+# Add date slider:
+# steps = []
+# for i in range(0, len(fig.data), 2):
+#     step = dict(
+#         method = "restyle",
+#         args   = ["visible", [False] * len(fig.data)],
+#     )
+#     step["args"][1][i:i+2] = [True, True]
+#     steps.append(step)
 
 
-# things to do:
-# - show only 1 obs related legend entry
-# - axes names
-# - subplot title
-
-# fig.append_trace()
 fig.show()
-# fig.show(renderer = "iframe")
+# render in a browser:
+# fig.show(renderer = "browser")
+# save as html file locally
+fig.show(renderer = "iframe")
+
+# %% implement Nash-Scutliffe efficiency:
+# load climatology data:
+obs_clim = pd.read_csv( os.path.join(obs_dir, "clim-"+site_comID+".csv"), 
+            names = ["month", "Obs_mean"], header=0, parse_dates=[0], 
+            infer_datetime_format=True, index_col = [0])
+
+df['month'] = df['date'].dt.month 
+df = pd.merge(df, obs_clim, on = "month")
 
 # %%
+def nse_calc(df):
+    # print (df["Obs_mean"])
+    NSE = 1 - \
+        ( sum( (df["Q_ldmb"].values - df["Obs"].values) **2 ) ) / \
+        ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
+    return NSE
+
+test = df[df["ens_mem"] == 52].sort_values(
+        'date', ascending=False).groupby('month').head(3)
+
+        
+NSE = test.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+        apply(lambda x:nse_calc(x))
+        
+
+# %%
+test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
+            header = 0)
+test.head()            
+test = pd.melt(test, id_vars = 'Days', var_name = "month", value_name = "discharge" )
+test.to_csv(os.path.join(obs_dir, "MHPS_DISCHARGE_long-2077"+".csv"))
