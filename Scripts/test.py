@@ -132,7 +132,8 @@ init_date_list  = np.append(
             pd.date_range(start='20200514', end='20200730').strftime("%Y%m%d").values,
             pd.date_range(start='20200801', end='20201215').strftime("%Y%m%d").values 
             )
-ens_members     = [*range(1, 5), 52]
+ens_members     = [*range(1,53)]
+# ens_members     = [*range(1, 5), 52]
 # river ids for Naugad in different renditions:
 # riv_id    = 25681
 # riv_id          = 54302
@@ -238,7 +239,7 @@ for i in [2,3]:
 #     steps.append(step)
 
 
-fig.show()
+# fig.show()
 # render in a browser:
 # fig.show(renderer = "browser")
 # save as html file locally
@@ -261,13 +262,14 @@ def nse_calc(df):
         ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
     return NSE
 
-test = df[df["ens_mem"] == 52].sort_values(
-        'date', ascending=False).groupby('month').head(3)
-
+# test = df[df["ens_mem"] == 52].sort_values(
+#         'date', ascending=False).groupby('month').head(3)
         
-NSE = test.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-        apply(lambda x:nse_calc(x))
+# NSE = test.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+#         apply(lambda x:nse_calc(x))
         
+NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+        apply(lambda x:nse_calc(x)).reset_index()
 
 # %%
 test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
