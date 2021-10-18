@@ -182,13 +182,13 @@ fig.append_trace(
 # plot un-weighted bias corrected forecasts:
 fig.append_trace(
         go.Box(x = df["date"], y=df["Q_dmb"], line = {"color":"rosybrown"},
-        legendgroup = "ens", showlegend = False), 
+        name = "ensemble spread", legendgroup = "ens", showlegend = False), 
         row = 2, col = 1
     )
 # plot linearly weighted bias corrected forecasts:
 fig.append_trace(
         go.Box(x = df["date"], y=df["Q_ldmb"], line = {"color":"rosybrown"},
-        legendgroup = "ens", showlegend = False), 
+        name = "ensemble spread", legendgroup = "ens", showlegend = False), 
         row = 3, col = 1
     )
 # plot high-res
@@ -213,6 +213,58 @@ fig.append_trace(
                y = df[df["ens_mem"] == 52]["Q_ldmb"],
                name = "high res LDMB", line = {"color":"blue"},
                legendgroup = "high-res", showlegend = False),
+    row = 3, col = 1
+    )
+
+# plot ensemble-median:
+# raw:
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").median().index,
+               y = df.groupby(by = "date").median()["Qout"],
+               name = "ensemble median", line = {"color":"orange"},
+               legendgroup = "ens-med", showlegend = True),
+    row = 1, col = 1
+    )
+# dmb:
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").median().index,
+               y = df.groupby(by = "date").median()["Q_dmb"],
+               name = "ensemble median", line = {"color":"orange"},
+               legendgroup = "ens-med", showlegend = False),
+    row = 2, col = 1
+    )
+# ldmb
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").median().index,
+               y = df.groupby(by = "date").median()["Q_ldmb"],
+               name = "ensemble median", line = {"color":"orange"},
+               legendgroup = "ens-med", showlegend = False),
+    row = 3, col = 1
+    )
+
+# plot ENSEMBLE MEAN:
+# raw:
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").mean().index,
+               y = df.groupby(by = "date").mean()["Qout"],
+               name = "ensemble mean", line = {"color":"green"},
+               legendgroup = "ens-mean", showlegend = True),
+    row = 1, col = 1
+    )
+# dmb:
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").mean().index,
+               y = df.groupby(by = "date").mean()["Q_dmb"],
+               name = "ensemble mean", line = {"color":"green"},
+               legendgroup = "ens-mean", showlegend = False),
+    row = 2, col = 1
+    )
+# ldmb
+fig.append_trace( 
+    go.Scatter(x = df.groupby(by = "date").mean().index,
+               y = df.groupby(by = "date").mean()["Q_ldmb"],
+               name = "ensemble mean", line = {"color":"green"},
+               legendgroup = "ens-mean", showlegend = False),
     row = 3, col = 1
     )
 # plot observations
