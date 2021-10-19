@@ -216,7 +216,7 @@ fig.append_trace(
     row = 3, col = 1
     )
 
-# plot ensemble-median:
+# plot ENSEMBLE MEDIAN:
 # raw:
 fig.append_trace( 
     go.Scatter(x = df.groupby(by = "date").median().index,
@@ -307,12 +307,25 @@ df['month'] = df['date'].dt.month
 df = pd.merge(df, obs_clim, on = "month")
 
 # %%
-def nse_calc(df):
+# create monthly raw and bc forecasts database for verification:
+df_med  = df.groupby(by = "date").median()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
+df_mean = df.groupby(by = "date").mean()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
+
+# %% 
+# function to calculate Nash-Scutliffe efficiency:
+def nse_form(df, fcst_type = "Q_ldmb"):
     # print (df["Obs_mean"])
     NSE = 1 - \
-        ( sum( (df["Q_ldmb"].values - df["Obs"].values) **2 ) ) / \
+        ( sum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
         ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
+    print(NSE)
+    # print(NSE.values)
     return NSE
+
+# function to create a monthly Nash-Scutliffe value for different parameters:
+def nse_calc():
+    return None
+
 
 # test = df[df["ens_mem"] == 52].sort_values(
 #         'date', ascending=False).groupby('month').head(3)
@@ -321,9 +334,31 @@ def nse_calc(df):
 #         apply(lambda x:nse_calc(x))
         
 NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-        apply(lambda x:nse_calc(x)).reset_index()
+         apply(lambda x:nse_form(x, fcst_type = "Qout")).reset_index()
+NSE
+# NSE.rename(columns = {0:'raw'}, inplace = True)
+# NSE.drop(["Obs_mean"], axis = 1, inplace = True)
 
-# %%
+# fcst_type = ["Qout", "Q_dmb", "Q_ldmb", "Q_med", "Q_mean"]
+
+# NSE[fcst_type] = 
+
+# NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+#         apply(lambda x:x.assign(
+#             dmb =             x:nse_form(x, fcst_type = "Qout")).reset_index()
+#         )
+         
+# df = df.groupby(by = "ens_mem", dropna = False).     \
+#         apply(lambda df:df.assign(
+#             Q_ldmb = df["Qout"].values / df["LDMB"].shift(periods=1).values )
+#             ).sort_index()
+
+
+# NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+#         apply(lambda x:nse_calc(x)).reset_index()
+
+
+# %% convert the received data to desired format
 test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
             header = 0)
 test.head()            
