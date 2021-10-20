@@ -123,8 +123,8 @@ def bc_fcsts(df, win_len):
 def nse_form(df, fcst_type = "Q_ldmb"):
     # formula for NSE
     NSE = 1 - \
-        ( sum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
-        ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
+        ( np.nansum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
+        ( np.nansum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
     return NSE
 
 # function to create a monthly Nash-Scutliffe value for different parameters:
@@ -186,9 +186,76 @@ def med_mean (df, obs_dir, site_comID):
 
     return df_med, df_mean, df
 
+# %% PLOT function
 # function for all the plotting happening:
-def plotter():
-    return None
+def plotter(df):
+    # make subplot interface
+    fig = make_subplots(rows = 3, cols = 1,
+                        shared_xaxes = True,
+                        shared_yaxes = True,
+                        vertical_spacing = 0.09,
+                        subplot_titles=("Raw", "DMB", "LDMB"),
+                        x_title = "date",
+                        y_title = "River discharge (<i>m<sup>3</sup>/s</i>)"    
+                        )
+    # Add figure and legend title                  
+    fig.update_layout(
+        title_text = "Bias-correction for streamflow forecasts"+
+            f"<br> site = {site}, day = {day}, window = {win_len}",
+        title_x = 0.5,
+        legend_title = "Legend", 
+        yaxis_rangemode = "tozero"
+        )
+
+    
+    fcst_types = ["Qout", "Q_dmb", "Q_ldmb"]
+    for type in fcst_types:
+        legend_decide = True if type == "Qout" else False
+
+        # plot ENSEMBLE SPREAD    
+        fig.append_trace(
+            go.Box(x = df["date"], y=df[type], line = {"color":"rosybrown"},
+            name = "ensemble spread", legendgroup = "ens", showlegend = legend_decide), 
+            row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # plot HIGH-RES
+        fig.append_trace( 
+            go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
+                    y = df[df["ens_mem"] == 52][type],
+                    name = "high res", line = {"color":"blue"},
+                    legendgroup = "high-res", showlegend = legend_decide),
+            row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # plot ENS-MEDIAN
+        fig.append_trace( 
+            go.Scatter(x = df.groupby(by = "date").median().index,
+                    y = df.groupby(by = "date").median()[type],
+                    name = "ensemble median", line = {"color":"orange"},
+                    legendgroup = "ens-med", showlegend = legend_decide),
+            row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # plot ENS-MEAN
+        fig.append_trace( 
+            go.Scatter(x = df.groupby(by = "date").mean().index,
+                    y = df.groupby(by = "date").mean()[type],
+                    name = "ensemble mean", line = {"color":"green"},
+                    legendgroup = "ens-mean", showlegend = legend_decide),
+            row = fcst_types.index(type) + 1, col = 1
+        )
+        
+        # plot OBS:
+        fig.append_trace(
+                go.Scatter(x = df[df["ens_mem"] == 52]["date"],
+                    y=df[df["ens_mem"] == 52]["Obs"], name = "observed",
+                    line = {"color":"red"}, mode = "lines+markers", 
+                    legendgroup = "obs", showlegend = legend_decide), 
+            row = fcst_types.index(type) + 1, col = 1
+        )
+
+    return fig
 
 # %% Initialization of variables
 # for terminal mode:
@@ -233,131 +300,26 @@ df = t1.reset_index()
 NSE = nse_calc(df, df_med, df_mean)
 NSE             
 
-# %% Add plotting functions
-# make subplot interface
-fig = make_subplots(rows = 3, cols = 1,
-                    shared_xaxes = True,
-                    shared_yaxes = True,
-                    vertical_spacing = 0.09,
-                    subplot_titles=("Raw", "DMB", "LDMB"),
-                    x_title = "date",
-                    y_title = "River discharge (<i>m<sup>3</sup>/s</i>)"    
-                    )
-#                     
-fig.update_layout(
-    title_text = "Bias-correction for streamflow forecasts"+
-         f"<br> site = {site}, day = {day}, window = {win_len}",
-    title_x = 0.5,
-    legend_title = "Legend",
-    )
+# %% Create time series plot
 
-# plot raw forecasts:
-fig.append_trace(
-        go.Box(x = df["date"], y=df["Qout"], line = {"color":"rosybrown"},
-        name = "ensemble spread", legendgroup = "ens", showlegend = True), 
-        row = 1, col = 1
-    )
-# plot un-weighted bias corrected forecasts:
-fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_dmb"], line = {"color":"rosybrown"},
-        name = "ensemble spread", legendgroup = "ens", showlegend = False), 
-        row = 2, col = 1
-    )
-# plot linearly weighted bias corrected forecasts:
-fig.append_trace(
-        go.Box(x = df["date"], y=df["Q_ldmb"], line = {"color":"rosybrown"},
-        name = "ensemble spread", legendgroup = "ens", showlegend = False), 
-        row = 3, col = 1
-    )
-# plot high-res
-fig.append_trace( 
-    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
-               y = df[df["ens_mem"] == 52]["Qout"],
-               name = "high res", line = {"color":"blue"},
-               legendgroup = "high-res"),
-    row = 1, col = 1
-    )
-# plot high-res dmb
-fig.append_trace( 
-    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
-               y = df[df["ens_mem"] == 52]["Q_dmb"],
-               name = "high res DMB", line = {"color":"blue"},
-               legendgroup = "high-res", showlegend = False),
-    row = 2, col = 1
-    )
-# plot high-res linearly-weighted
-fig.append_trace( 
-    go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
-               y = df[df["ens_mem"] == 52]["Q_ldmb"],
-               name = "high res LDMB", line = {"color":"blue"},
-               legendgroup = "high-res", showlegend = False),
-    row = 3, col = 1
-    )
+# fixes to make:
+#   ensure that lomer y limit is 0
+#   scaling based on 
 
-# plot ENSEMBLE MEDIAN:
-# raw:
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").median().index,
-               y = df.groupby(by = "date").median()["Qout"],
-               name = "ensemble median", line = {"color":"orange"},
-               legendgroup = "ens-med", showlegend = True),
-    row = 1, col = 1
-    )
-# dmb:
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").median().index,
-               y = df.groupby(by = "date").median()["Q_dmb"],
-               name = "ensemble median", line = {"color":"orange"},
-               legendgroup = "ens-med", showlegend = False),
-    row = 2, col = 1
-    )
-# ldmb
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").median().index,
-               y = df.groupby(by = "date").median()["Q_ldmb"],
-               name = "ensemble median", line = {"color":"orange"},
-               legendgroup = "ens-med", showlegend = False),
-    row = 3, col = 1
-    )
+fig = plotter(df)
+# fig.show()
+# render in a browser:
+fig.show(renderer = "browser")
+# save as html file locally
+# fig.show(renderer = "iframe") 
 
-# plot ENSEMBLE MEAN:
-# raw:
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").mean().index,
-               y = df.groupby(by = "date").mean()["Qout"],
-               name = "ensemble mean", line = {"color":"green"},
-               legendgroup = "ens-mean", showlegend = True),
-    row = 1, col = 1
-    )
-# dmb:
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").mean().index,
-               y = df.groupby(by = "date").mean()["Q_dmb"],
-               name = "ensemble mean", line = {"color":"green"},
-               legendgroup = "ens-mean", showlegend = False),
-    row = 2, col = 1
-    )
-# ldmb
-fig.append_trace( 
-    go.Scatter(x = df.groupby(by = "date").mean().index,
-               y = df.groupby(by = "date").mean()["Q_ldmb"],
-               name = "ensemble mean", line = {"color":"green"},
-               legendgroup = "ens-mean", showlegend = False),
-    row = 3, col = 1
-    )
-# plot observations
-fig.append_trace( 
-    go.Scatter(x = df["date"], y = df["Obs"], name = "observations", 
-                line = {"color":"red"}, mode = "markers", legendgroup = "obs"),
-    row = 1, col = 1
-    )
-for i in [2,3]:
-    fig.append_trace(
-            go.Scatter(x = df["date"], y=df["Obs"], line = {"color":"red"},
-            mode = "markers", legendgroup = "obs", showlegend = False), 
-        row = i, col = 1
-        )
 
+# %% create observations vs 
+
+
+
+# %% convert the received data to desired format
+#
 # Add date slider:
 # steps = []
 # for i in range(0, len(fig.data), 2):
@@ -369,13 +331,6 @@ for i in [2,3]:
 #     steps.append(step)
 
 
-# fig.show()
-# render in a browser:
-# fig.show(renderer = "browser")
-# save as html file locally
-fig.show(renderer = "iframe") 
-
-# %% convert the received data to desired format
 test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
             header = 0)
 test.head()            
