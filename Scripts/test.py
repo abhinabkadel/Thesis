@@ -119,6 +119,47 @@ def bc_fcsts(df, win_len):
 
     return df
 
+# function to calculate Nash-Scutliffe efficiency:
+def nse_form(df, fcst_type = "Q_ldmb"):
+    # formula for NSE
+    NSE = 1 - \
+        ( sum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
+        ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
+    return NSE
+
+# function to create a monthly Nash-Scutliffe value for different parameters:
+def nse_calc(df, df_med, df_mean):
+    # calculate NSE for first s    
+    NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+         apply(lambda x:nse_form(x, fcst_type = "Qout")).reset_index()
+    NSE
+    NSE.rename(columns = {0:'raw'}, inplace = True)
+    NSE.drop(["Obs_mean"], axis = 1, inplace = True)
+
+    # forecast output variables to calculate the bias correction metric:
+    fcst_type = ["Q_dmb", "Q_ldmb", "Q_med", "Q_mean"]
+
+    for i in fcst_type:
+        if i == "Q_med":
+            for j in ["Qout", "Q_dmb", "Q_ldmb"]:
+                NSE["med_"+j] = df_med.groupby(by = ["month", "Obs_mean"],  
+                            dropna = False). \
+                    apply(lambda x:nse_form(x, fcst_type = j)). \
+                    reset_index()[0]
+
+        elif i == "Q_mean":
+            for j in ["Qout", "Q_dmb", "Q_ldmb"]:
+                NSE["mean_" + j] = df_mean.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+                    apply(lambda x:nse_form(x, fcst_type = j)). \
+                reset_index()[0]
+
+        else:
+            NSE[i] = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
+                    apply(lambda x:nse_form(x, fcst_type = i)). \
+                reset_index()[0]
+
+    return NSE
+
 # %% Initialization of variables
 # for terminal mode:
 # rt_dir          = r"./Fcst_data"
@@ -307,57 +348,28 @@ df['month'] = df['date'].dt.month
 df = pd.merge(df, obs_clim, on = "month")
 
 # %%
+
+# %% 
+
+
+        
+        
+
+# %%
+
+
 # create monthly raw and bc forecasts database for verification:
 df_med  = df.groupby(by = "date").median()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
 df_mean = df.groupby(by = "date").mean()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
+df_med['month']  = df_med.index.month
+df_mean['month'] = df_mean.index.month
 
-# %% 
-# function to calculate Nash-Scutliffe efficiency:
-def nse_form(df, fcst_type = "Q_ldmb"):
-    # print (df["Obs_mean"])
-    NSE = 1 - \
-        ( sum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
-        ( sum( (df["Obs"].values - df["Obs_mean"].values) **2 ) )
-    print(NSE)
-    # print(NSE.values)
-    return NSE
+df_med  = pd.merge(df_med, obs_clim, on = "month")
+df_mean = pd.merge(df_mean, obs_clim, on = "month")
 
-# function to create a monthly Nash-Scutliffe value for different parameters:
-def nse_calc():
-    return None
+# %%
 
-
-# test = df[df["ens_mem"] == 52].sort_values(
-#         'date', ascending=False).groupby('month').head(3)
-        
-# NSE = test.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-#         apply(lambda x:nse_calc(x))
-        
-NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-         apply(lambda x:nse_form(x, fcst_type = "Qout")).reset_index()
-NSE
-# NSE.rename(columns = {0:'raw'}, inplace = True)
-# NSE.drop(["Obs_mean"], axis = 1, inplace = True)
-
-# fcst_type = ["Qout", "Q_dmb", "Q_ldmb", "Q_med", "Q_mean"]
-
-# NSE[fcst_type] = 
-
-# NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-#         apply(lambda x:x.assign(
-#             dmb =             x:nse_form(x, fcst_type = "Qout")).reset_index()
-#         )
-         
-# df = df.groupby(by = "ens_mem", dropna = False).     \
-#         apply(lambda df:df.assign(
-#             Q_ldmb = df["Qout"].values / df["LDMB"].shift(periods=1).values )
-#             ).sort_index()
-
-
-# NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
-#         apply(lambda x:nse_calc(x)).reset_index()
-
-
+             
 # %% convert the received data to desired format
 test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
             header = 0)
