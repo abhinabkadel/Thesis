@@ -129,16 +129,17 @@ def nse_form(df, fcst_type = "Q_ldmb"):
 
 # function to create a monthly Nash-Scutliffe value for different parameters:
 def nse_calc(df, df_med, df_mean):
-    # calculate NSE for first s    
+    # calculate NSE for the raw ensemble spread:   
     NSE = df.groupby(by = ["month", "Obs_mean"],  dropna = False). \
          apply(lambda x:nse_form(x, fcst_type = "Qout")).reset_index()
-    NSE
     NSE.rename(columns = {0:'raw'}, inplace = True)
     NSE.drop(["Obs_mean"], axis = 1, inplace = True)
 
     # forecast output variables to calculate the bias correction metric:
     fcst_type = ["Q_dmb", "Q_ldmb", "Q_med", "Q_mean"]
 
+    # Loop through the forecast output variables and calculate the NSE
+    # coefficient for each of the cases. 
     for i in fcst_type:
         if i == "Q_med":
             for j in ["Qout", "Q_dmb", "Q_ldmb"]:
@@ -159,6 +160,35 @@ def nse_calc(df, df_med, df_mean):
                 reset_index()[0]
 
     return NSE
+
+# function to create mean and median databases used later for monthly verification:
+def med_mean (df, obs_dir, site_comID):    
+    # load climatology data
+    obs_clim = pd.read_csv( os.path.join(obs_dir, "clim-"+site_comID+".csv"), 
+                names = ["month", "Obs_mean"], header=0, parse_dates=[0], 
+                infer_datetime_format=True, index_col = [0])
+
+    # calculate ensemble mean and median 
+    df_med  = df.groupby(by = "date").median().reset_index() \
+        [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    df_mean = df.groupby(by = "date").mean().reset_index() \
+        [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    # add new column with months related to the forecast date:
+    # df_med['month']  = df_med.index.month
+    # df_mean['month'] = df_mean.index.month
+    df_med['month']  = df_med['date'].dt.month 
+    df_mean['month'] = df_mean['date'].dt.month 
+    df['month'] = df['date'].dt.month 
+    # add climatological values:
+    df_med  = pd.merge(df_med, obs_clim, on = "month")
+    df_mean = pd.merge(df_mean, obs_clim, on = "month")
+    df = pd.merge(df, obs_clim, on = "month") 
+
+    return df_med, df_mean, df
+
+# function for all the plotting happening:
+def plotter():
+    return None
 
 # %% Initialization of variables
 # for terminal mode:
@@ -195,8 +225,15 @@ fcst_data = add_obs(place = site, fcst_df = fcst_data,
 # %% Bias correct the forecasts using DMB and LDMB
 t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
-# %% Add plotting functions
+# %% Ensemble Mean/Median + Add climatology
 df = t1.reset_index()
+[df_med, df_mean, df] = med_mean(df, obs_dir, site_comID)
+
+# %% Calculate NSE 
+NSE = nse_calc(df, df_med, df_mean)
+NSE             
+
+# %% Add plotting functions
 # make subplot interface
 fig = make_subplots(rows = 3, cols = 1,
                     shared_xaxes = True,
@@ -336,40 +373,8 @@ for i in [2,3]:
 # render in a browser:
 # fig.show(renderer = "browser")
 # save as html file locally
-fig.show(renderer = "iframe")
+fig.show(renderer = "iframe") 
 
-# %% implement Nash-Scutliffe efficiency:
-# load climatology data:
-obs_clim = pd.read_csv( os.path.join(obs_dir, "clim-"+site_comID+".csv"), 
-            names = ["month", "Obs_mean"], header=0, parse_dates=[0], 
-            infer_datetime_format=True, index_col = [0])
-
-df['month'] = df['date'].dt.month 
-df = pd.merge(df, obs_clim, on = "month")
-
-# %%
-
-# %% 
-
-
-        
-        
-
-# %%
-
-
-# create monthly raw and bc forecasts database for verification:
-df_med  = df.groupby(by = "date").median()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
-df_mean = df.groupby(by = "date").mean()[["Obs","Qout","Q_dmb", "Q_ldmb"]]
-df_med['month']  = df_med.index.month
-df_mean['month'] = df_mean.index.month
-
-df_med  = pd.merge(df_med, obs_clim, on = "month")
-df_mean = pd.merge(df_mean, obs_clim, on = "month")
-
-# %%
-
-             
 # %% convert the received data to desired format
 test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
             header = 0)
