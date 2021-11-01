@@ -1,4 +1,5 @@
 # %%
+import posixpath
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -314,7 +315,38 @@ fig.show(renderer = "browser")
 # fig.show(renderer = "iframe") 
 
 
-# %% create observations vs 
+# %% create observations vs forecasts plot:
+# make subplot interface
+# fig = make_subplots(rows = 1, cols = 1,
+#                     shared_xaxes = True,
+#                     shared_yaxes = True,
+#                     vertical_spacing = 0.09,
+#                     subplot_titles=("Raw", "DMB", "LDMB"),
+#                     x_title = "observations (<i>m<sup>3</sup>/s</i>)",
+#                     y_title = "forecasted discharge (<i>m<sup>3</sup>/s</i>)"    
+#                     )
+import plotly.express as px
+
+# for _, grouped_df in df.groupby('date'): 
+#     fig = px.box(grouped_df, x = "date", y = "Qout")
+
+fig = px.box(df, x = "Obs", y = "Qout")
+fig.show(renderer = "browser")
+
+    # fig.append_trace(
+    #             go.Box(x = grouped_df["date"], y = grouped_df[type], line = {"color":"rosybrown"},
+    #             name = "ensemble spread", legendgroup = "ens", showlegend = False), 
+    #         )
+    
+# # Add figure and legend title                  
+# fig.update_layout(
+#     title_text = "ensemble forecast vs observations for a particular day"+
+#         f"<br> site = {site}, day = {day}, window = {win_len}",
+#     title_x = 0.5,
+#     legend_title = "Legend", 
+#     yaxis_rangemode = "tozero"
+#     )
+
 
 
 
