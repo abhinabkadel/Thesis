@@ -58,6 +58,7 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     fcst_data = fcst_data.reorder_levels(["ens_mem", "day_no", "date"])
     
     return fcst_data
+
 # function to add observations:
 def add_obs(place, obs_dir, day, fcst_df):
     # Load the observations csv file and load the dataframe
@@ -123,19 +124,56 @@ def bc_fcsts(df, win_len):
 
     return df
 
-# function to create mean and median databases used later for monthly verification:
-def med_mean (df, obs_dir, site_comID):    
-    # load climatology data
-    obs_clim = pd.read_csv( os.path.join(obs_dir, "clim-"+site_comID+".csv"), 
-                names = ["month", "Obs_mean"], header=0, parse_dates=[0], 
-                infer_datetime_format=True, index_col = [0])
+# function to create determininstic forecasts:
+def det_frcsts (df):    
+    # ensemble median:
+    df_med  = df.groupby(by = "date").median().reset_index() \
+    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    # ensemble mean:
+    df_mean = df.groupby(by = "date").mean().reset_index() \
+        [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    # high-res forecast
+    df_highres = df[df["ens_mem"] == 52] \
+    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
 
-    # add climatological values:
-    df_med  = pd.merge(df_med, obs_clim, on = "month")
-    df_mean = pd.merge(df_mean, obs_clim, on = "month")
-    df = pd.merge(df, obs_clim, on = "month") 
+    return df_med, df_mean, df_highres
 
-    return df_med, df_mean, df
+# function to calculate Nash-Scutliffe efficiency:
+def nse_form(df, flo_mean, fcst_type = "Q_ldmb"):
+    # formula for NSE
+    NSE = 1 - \
+        ( np.nansum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
+        ( np.nansum( (df["Obs"].values - flo_mean) **2 ) )
+    return NSE
+
+# create NSE calculation table:
+def nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim):
+    metrics = ["median", "mean", "hi-res"]
+    lo_flo, hi_flo, col_names = [], [], []
+    for j in metrics:
+        # set the deterministic forecast type:
+        if j == "median": df = df_med
+        elif j == "mean": df = df_mean
+        else : df = df_highres 
+
+        # cycle through the raw and bias-corrected forecasts:
+        fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+        for i in fcst_type:
+            # low flow NSE:
+            NSE = nse_form (df = df[df["Obs"] <= q70_flo], fcst_type=i,
+                    flo_mean = lo_flo_clim)
+            lo_flo.append(NSE)
+            # high flow NSE:
+            NSE = nse_form (df = df[df["Obs"] > q70_flo], fcst_type=i,
+                    flo_mean = hi_flo_clim)
+            hi_flo.append(NSE)
+            # create column names to ease dataframe creation later:
+            col_names.append(j+"_"+ i)
+
+    NSE = pd.DataFrame([lo_flo, hi_flo], columns = col_names, 
+            index = ['low_flow', 'high_flow']).rename_axis("flow_event")
+
+    return NSE
 
 # %% PLOT function
 # function for all the plotting happening:
@@ -276,78 +314,29 @@ t2 = fcst_data
 [fcst_data, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
     place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
-#  %% Plot observation time series:
-# fig2 = plot_obs(obs_dir)
-# # fig2.show()
-# fig2.show(renderer = "iframe")
-
 # %% Bias correct the forecasts using DMB and LDMB
 t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
-# %% Ensemble Mean/Median + Add climatology
+# %% Separate dataframes for deterministic forecasts:
 df = t1.reset_index()
-# [df_med, df_mean, df] = med_mean(df, obs_dir, site_comID)
+[df_med, df_mean, df_highres] = det_frcsts(df)
 
 # %% Calculate NSE 
-# NSE = nse_calc(df, df_med, df_mean)
-# NSE              
+NSE = nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim)
 
-def nse_calc(df, df_med, df_mean):
-    
-    return NSE
-# %%
-# function to calculate Nash-Scutliffe efficiency:
-def nse_form(df, flo_mean, fcst_type = "Q_ldmb"):
-    # formula for NSE
-    NSE = 1 - \
-        ( np.nansum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
-        ( np.nansum( (df["Obs"].values - flo_mean) **2 ) )
-    return NSE
-
-# %% define ens mean, median and high-res dataframes
-# calculate ensemble mean and median 
-df_med  = df.groupby(by = "date").median().reset_index() \
-    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
-df_mean = df.groupby(by = "date").mean().reset_index() \
-    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
-df_highres = df[df["ens_mem"] == 52] \
-    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
-
-# %% divide dfs into low/high flow categories:
-metrics = ["median", "mean", "hi-res"]
-lo_flo, hi_flo, col_names = [], [], []
-for j in metrics:
-    # set the deterministic forecast type:
-    if j == "median": df = df_med
-    elif j == "mean": df = df_mean
-    else : df = df_highres 
-
-    # cycle through the raw and bias-corrected forecasts:
-    fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
-    for i in fcst_type:
-        print (i)
-        NSE = nse_form (df = df[df["Obs"] <= q70_flo], fcst_type=i,
-                flo_mean = lo_flo_clim)
-        lo_flo.append(NSE)
-        print(NSE)
-        NSE = nse_form (df = df[df["Obs"] > q70_flo], fcst_type=i,
-                flo_mean = hi_flo_clim)
-        print(NSE)
-        hi_flo.append(NSE)
-
-        col_names.append(j+"_"+ i)
-
-NSE = pd.DataFrame([lo_flo, hi_flo], columns = col_names, 
-        index = ['low_flow', 'high_flow']).rename_axis("flow_event")
 # %% Create time series plot
 # fixes to make:
 #   ensure that lower y limit is 0
 #   scaling based on 
 fig = time_series_plotter(df)
-# render in a browser:
 fig.show(renderer = "browser")
-# save as html file locally
 # fig.show(renderer = "iframe") 
+
+#  %% Plot observation time series for all sites:
+# fig2 = plot_obs(obs_dir)
+# # fig2.show()
+# fig2.show(renderer = "iframe")
+
 
 # %% create observations vs forecasts plot:
 fig3 = go.Figure(
@@ -372,10 +361,3 @@ fig3.add_trace(
     )
 # fig3.show()
 fig3.show(renderer = "iframe")
-
-# %%
-test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
-            header = 0)
-test.head()            
-test = pd.melt(test, id_vars = 'Days', var_name = "month", value_name = "discharge" )
-test.to_csv(os.path.join(obs_dir, "MHPS_DISCHARGE_long-2077"+".csv"))
