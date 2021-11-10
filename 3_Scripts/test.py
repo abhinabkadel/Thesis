@@ -1,17 +1,16 @@
-# %%
+# %% Import necessary modules
+# read netcdf files:
 import xarray as xr
+# dataframe and data analysis
 import pandas as pd
 import numpy as np
-import datetime as dt
+# use os commands:
 import os 
+# make plots:
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-# changes made:
-#   df_creator: file name changed
-#   riv_id: changed
-
-# to do:
-# replace nan with 0
+# print warnings:
+import warnings
 
 #%% Defined functions:
 # create single database from 52 ens. mems. across given time period:
@@ -284,21 +283,21 @@ def plot_obs(obs_dir):
 
 # %% Initialization of variables
 # site name and associated comID:
-site            = "Marsyangdi"
+site            = "Balephi"
 ## for terminal mode:
-rt_dir          = r"./1_Data/Fcst_data"
-obs_dir         = r"./1_Data/obs_data"
-site_comID      = pd.read_pickle (r"./3_Scripts/Sites_info/sites_tbl.pkl").loc[site].values[0]
+# rt_dir          = r"./1_Data/Fcst_data"
+# obs_dir         = r"./1_Data/obs_data"
+# site_comID      = pd.read_pickle (r"./3_Scripts/Sites_info/sites_tbl.pkl").loc[site].values[0]
 ## for interactive mode:
-# rt_dir          = r"../1_Data/Fcst_data"
-# obs_dir         = r"../1_Data/obs_data"
-# site_comID      = pd.read_pickle (r"./Sites_info/sites_tbl.pkl").loc[site].values[0]
+rt_dir          = r"../1_Data/Fcst_data"
+obs_dir         = r"../1_Data/obs_data"
+site_comID      = pd.read_pickle (r"./Sites_info/sites_tbl.pkl").loc[site].values[0]
 # date list of interest:
 # init_date_list  = np.append( 
 #             pd.date_range(start='20200514', end='20200730').strftime("%Y%m%d").values,
 #             pd.date_range(start='20200801', end='20201215').strftime("%Y%m%d").values 
 #             )
-init_date_list  = pd.date_range(start='20150101', end='20151231').strftime("%Y%m%d").values
+init_date_list  = pd.date_range(start='20140101', end='20151231').strftime("%Y%m%d").values
 ens_members     = [*range(1,53)]
 
 # forecast day of interest:
@@ -306,9 +305,14 @@ day             = 2
 win_len         = 7
 
 # %% Loop through all the files and create a dataframe:
-fcst_data = df_creator(rt_dir, init_date_list, site_comID, ens_members)
+try:
+    fcst_data = pd.read_pickle("./pickle_dfs/"+site+".pkl")
+except:
+    warnings.warn("Pickle file missing. Creating forecast database using \
+            individual ensemble files")
+    fcst_data = df_creator(rt_dir, init_date_list, site_comID, ens_members)
+
 t2 = fcst_data
-## Add a pickle option here ##
 
 # %% Add observations:
 [fcst_data, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
