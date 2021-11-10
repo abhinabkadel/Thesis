@@ -354,45 +354,77 @@ fig.show(renderer = "browser")
 
 
 # %% create observations vs forecasts plot:
-fig3 = go.Figure(
-        layout = {"title_text": "forecasts vs observations",
-                    "title_x": 0.5,
-                    "xaxis_title" : "observations (<i>m<sup>3</sup>/s</i>)",
-                    "yaxis_title" : "forecasted discharge (<i>m<sup>3</sup>/s</i>)",
-                    "yaxis_range" : [0, df.Qout.max()],
-                    "xaxis_range" : [0, df.Obs.max()],
-                    "legend_title": "Legend",
-                    # "hovermode" : "x unified"
-                }
-    )    
-for _, grouped_df in df.groupby('date'): 
-    # raw forecasts
-    fig3.add_trace(
-            go.Box(x = grouped_df["Obs"], y = grouped_df["Qout"], 
+fig3 = make_subplots(
+        rows = 3, cols = 1,
+        shared_xaxes = True,
+        shared_yaxes = True,
+        vertical_spacing = 0.09,
+        subplot_titles=("Raw", "DMB", "LDMB"),
+        x_title = "observations (<i>m<sup>3</sup>/s</i>)",
+        y_title = "forecasted discharge (<i>m<sup>3</sup>/s</i>)"    
+    )
+
+fcst_types = ["Qout", "Q_dmb", "Q_ldmb"]
+for type in fcst_types:
+    
+    legend_decide = True if type == "Qout" else False
+    
+    for date, grouped_df in df.groupby('date'): 
+        if type == "Qout" and date == df["date"][0]:
+            legend_decide = True
+        else : legend_decide = False
+
+        # ENS spread
+        fig3.append_trace(
+            go.Box(x = grouped_df["Obs"], y = grouped_df[type], 
             line = {"color":"sandybrown"}, legendgroup = "ens_mem",
-            name = "ens_frcsts", showlegend = False), 
-        )
-    # bias corrected:
-    fig3.add_trace(
-            go.Box(x = grouped_df["Obs"], y = grouped_df["Q_dmb"], 
-            line = {"color":"red"}, legendgroup = "ens_mem",
-            name = "ens_frcsts", showlegend = False), 
+            name = "ens spread", showlegend = legend_decide),
+        row = fcst_types.index(type) + 1, col = 1
         )
 
-fig3.add_trace(
-        go.Scatter(x = df_mean["Obs"], y = df_mean["Q_dmb"],
-                name = "bias", mode = 'markers',
-                marker = {"color":"green"})
+        # add y = x line
+        fig3.append_trace(
+            go.Scatter(x = np.arange(0, max(df.Qout.max(),df.Obs.max())), 
+                    y = np.arange(0, max(df.Qout.max(),df.Obs.max())),
+                    name = "y = x", line = {"color":"black"}),
+        row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # ENS-MEAN:
+        fig3.add_trace(
+            go.Scatter(x = df_mean["Obs"], y = df_mean[type],
+                    name = "ens mean", mode = 'markers',
+                    marker = {"color":"green"}),
+        row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # ENS-MEDIAN:
+        fig3.add_trace(
+            go.Scatter(x = df_mean["Obs"], y = df_med[type],
+                    name = "ens mean", mode = 'markers',
+                    marker = {"color":"blue"}),
+        row = fcst_types.index(type) + 1, col = 1
+        )
+
+        # ENS-MEDIAN:
+        fig3.add_trace(
+            go.Scatter(x = df_mean["Obs"], y = df_highres[type],
+                    name = "ens mean", mode = 'markers',
+                    marker = {"color":"red"}),
+        row = fcst_types.index(type) + 1, col = 1
+        )
+
+
+fig3.update_layout(
+        title_text = f"forecasts vs observations for {site}",
+        title_x = 0.5,
+        legend_title = "Legend", 
+        yaxis_rangemode = "tozero",
+        yaxis_range = [0, df.Qout.max()],
+        xaxis_range = [0, df.Obs.max()],
     )
 
-# add y = x line
-fig3.add_trace(
-        go.Scatter(x = np.arange(0, max(df.Qout.max(),df.Obs.max())), 
-                y = np.arange(0, max(df.Qout.max(),df.Obs.max())),
-                name = "y = x", line = {"color":"black"})
-    )
-
-
-fig3.show()
-# fig3.show(renderer = "iframe")
+# fig3.show()
+# fig3.show(renderer = "browser")
+fig3.show(renderer = "iframe")
 # %%
