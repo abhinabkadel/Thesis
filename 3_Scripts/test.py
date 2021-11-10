@@ -255,7 +255,7 @@ def plot_obs(obs_dir):
                     # "yaxis_range" : [0, 1200],
                     "legend_title": "Legend",
                     "xaxis_tickangle": 45,
-                    "xaxis_dtick":"M2",
+                    # "xaxis_dtick":"M2",
                     "xaxis_tickformat": "%b\n%Y",
                     "yaxis_rangemode":"nonnegative",
                     "xaxis_rangeslider_visible":True,
@@ -263,6 +263,17 @@ def plot_obs(obs_dir):
                 }
     )   
 
+    fig.update_xaxes(
+        tickformatstops = [
+            dict(dtickrange=[None, 604800000], value="%e. %b"),
+            # weekly view:
+            dict(dtickrange=[604800000, "M1"], value="%e. %b"),
+            # monthly view:
+            dict(dtickrange=["M1", "M12"], value="%b '%y"),
+
+            dict(dtickrange=["M12", None], value="%Y Y")
+        ]
+    )
     # plot all the obs except Marsyangdi HPP:
     for site_name in pd.read_pickle (r"./Sites_info/sites_tbl.pkl").index.values:
         # Marsyangdi HPP is excluded due to only 7 mos. of data in 2020
@@ -283,7 +294,7 @@ def plot_obs(obs_dir):
 
 # %% Initialization of variables
 # site name and associated comID:
-site            = "Balephi"
+site            = "Marsyangdi"
 ## for terminal mode:
 # rt_dir          = r"./1_Data/Fcst_data"
 # obs_dir         = r"./1_Data/obs_data"
@@ -338,8 +349,8 @@ fig.show(renderer = "browser")
 
 #  %% Plot observation time series for all sites:
 # fig2 = plot_obs(obs_dir)
-# # fig2.show()
-# fig2.show(renderer = "iframe")
+# fig2.show(renderer = "browser")
+# # fig2.show(renderer = "iframe")
 
 
 # %% create observations vs forecasts plot:
@@ -348,20 +359,40 @@ fig3 = go.Figure(
                     "title_x": 0.5,
                     "xaxis_title" : "observations (<i>m<sup>3</sup>/s</i>)",
                     "yaxis_title" : "forecasted discharge (<i>m<sup>3</sup>/s</i>)",
-                    "yaxis_range" : [0, 4000],
-                    "legend_title": "Legend"
+                    "yaxis_range" : [0, df.Qout.max()],
+                    "xaxis_range" : [0, df.Obs.max()],
+                    "legend_title": "Legend",
+                    # "hovermode" : "x unified"
                 }
     )    
 for _, grouped_df in df.groupby('date'): 
+    # raw forecasts
     fig3.add_trace(
             go.Box(x = grouped_df["Obs"], y = grouped_df["Qout"], 
-            line = {"color":"sandybrown"}, legendgroup = "ens_mem", 
-            showlegend = False), 
+            line = {"color":"sandybrown"}, legendgroup = "ens_mem",
+            name = "ens_frcsts", showlegend = False), 
         )
-# add a y = x line for the metric 
+    # bias corrected:
+    fig3.add_trace(
+            go.Box(x = grouped_df["Obs"], y = grouped_df["Q_dmb"], 
+            line = {"color":"red"}, legendgroup = "ens_mem",
+            name = "ens_frcsts", showlegend = False), 
+        )
+
 fig3.add_trace(
-        go.Scatter(x = np.arange(0,1501), y = np.arange(0, 1501),
-                    name = "y = x", line = {"color":"black"})
+        go.Scatter(x = df_mean["Obs"], y = df_mean["Q_dmb"],
+                name = "bias", mode = 'markers',
+                marker = {"color":"green"})
     )
-# fig3.show()
-fig3.show(renderer = "iframe")
+
+# add y = x line
+fig3.add_trace(
+        go.Scatter(x = np.arange(0, max(df.Qout.max(),df.Obs.max())), 
+                y = np.arange(0, max(df.Qout.max(),df.Obs.max())),
+                name = "y = x", line = {"color":"black"})
+    )
+
+
+fig3.show()
+# fig3.show(renderer = "iframe")
+# %%
