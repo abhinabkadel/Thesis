@@ -1,0 +1,24 @@
+name: thesis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - geopandas
+  - xarray
+  - matplotlib
+  - ipykernel
+  - contextily
+  - arrow
+  - pylint
+  - scipy
+  - sympy
+  - pendulum
+  - python-wget
+  - gdown
+  - recursive_diff
+  - dask
+  - seaborn
+  - plotly
+  - nbformat
+prefix: C:\Users\abhin\miniconda3\envs\thesis
