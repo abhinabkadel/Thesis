@@ -330,6 +330,7 @@ t2 = fcst_data
     place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
 # %% Bias correct the forecasts using DMB and LDMB
+# this works here:
 t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
 # %% Separate dataframes for deterministic forecasts:
