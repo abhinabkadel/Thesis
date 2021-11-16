@@ -340,6 +340,21 @@ df = t1.reset_index()
 # %% Calculate NSE 
 NSE = nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim)
 
+# %% calculate metrics using Hydrostats:
+
+# calculate pearson coefficient:
+from hydrostats import HydroErr
+correlation = HydroErr.pearson_r(df_med["Q_ldmb"], df_med["Obs"])
+
+# calculate flow variability error or coef. of variability:
+from scipy import stats
+flow_variability = stats.variation(df_med["Q_ldmb"]) / 
+                    stats.variation(df_med["Obs"])
+
+# calculate bias:
+
+
+
 # %% Create time series plot
 # fixes to make:
 #   ensure that lower y limit is 0
