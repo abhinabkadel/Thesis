@@ -1,9 +1,14 @@
-# %% Import necessary modules
+# %% 
+# Import necessary modules
 # read netcdf files:
+from numpy.lib.function_base import _diff_dispatcher
 import xarray as xr
 # dataframe and data analysis
 import pandas as pd
 import numpy as np
+# error metric calculations:
+from hydrostats import HydroErr
+from scipy import stats
 # use os commands:
 import os 
 # make plots:
@@ -138,14 +143,33 @@ def det_frcsts (df):
     return df_med, df_mean, df_highres
 
 # function to calculate Nash-Scutliffe efficiency:
-def nse_form(df, flo_mean, fcst_type = "Q_ldmb"):
+def nse_form(df, flo_mean, fcst_type = "Q_dmb"):
     # formula for NSE
     NSE = 1 - \
         ( np.nansum( (df[fcst_type].values - df["Obs"].values) **2 ) ) / \
         ( np.nansum( (df["Obs"].values - flo_mean) **2 ) )
     return NSE
 
+# correlation, bias and flow variability:
+def kge_form(df, fcst_type = "Q_dmb"):
+    # calculate pearson coefficient:
+    correlation = HydroErr.pearson_r(df[fcst_type], df["Obs"])
+    # calculate flow variability error or coef. of variability:
+    flow_variability = stats.variation(df[fcst_type], nan_policy='omit') / \
+                        stats.variation(df["Obs"], nan_policy='omit')
+    # calculate bias:
+    bias = df[fcst_type].mean() / df["Obs"].mean()
+    # calculate KGE
+    KGE  = 1 - (
+            (correlation - 1)**2 + (flow_variability - 1)**2 + (bias - 1)**2 
+        )**0.5
+    # KGE using the HydroErr formula:
+    # print(HydroErr.kge_2012(df[fcst_type], df["Obs"]))
+    
+    return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
+
 # create NSE calculation table:
+# THIS MIGHT BE REDUNDANT #
 def nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim):
     metrics = ["median", "mean", "hi-res"]
     lo_flo, hi_flo, col_names = [], [], []
@@ -308,7 +332,7 @@ site_comID      = pd.read_pickle (r"./Sites_info/sites_tbl.pkl").loc[site].value
 #             pd.date_range(start='20200514', end='20200730').strftime("%Y%m%d").values,
 #             pd.date_range(start='20200801', end='20201215').strftime("%Y%m%d").values 
 #             )
-init_date_list  = pd.date_range(start='20140101', end='20151231').strftime("%Y%m%d").values
+init_date_list  = pd.date_range(start='20140101', end='20141231').strftime("%Y%m%d").values
 ens_members     = [*range(1,53)]
 
 # forecast day of interest:
@@ -340,28 +364,73 @@ df = t1.reset_index()
 # %% Calculate NSE 
 NSE = nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim)
 
-# %% calculate metrics using Hydrostats:
+# %% concatenate the 3 deterministic forecast matrices to create 
+# a single deterministic dataframe:
+df_det = pd.concat([df_med, df_mean, df_highres], keys=["median", "mean", "high-res"])
+df_det = df_det.droplevel(1)
+df_det.index.names = ["det_frcst"]
 
-# calculate pearson coefficient:
-from hydrostats import HydroErr
-correlation = HydroErr.pearson_r(df_med["Q_ldmb"], df_med["Obs"])
+# %%
+# defines dataframes for low_flow and high_flow values
+df_low  = df_det[df_det["Obs"] <= q70_flo]
+df_high = df_det[df_det["Obs"] > q70_flo]
 
-# calculate flow variability error or coef. of variability:
-from scipy import stats
-flow_variability = stats.variation(df_med["Q_ldmb"]) / 
-                    stats.variation(df_med["Obs"])
+# loop through the two dataframes to create:
+for df in [df_low, df_high]:
+    flo_mean = lo_flo_clim if df.equals(df_low) else hi_flo_clim
+    
+    data = []
+    fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+    # loop through the raw and bias corrected forecasts:
+    for i in fcst_type:
+        # NSE:
+        NSE = df.groupby(by = "det_frcst").apply(
+                lambda x:nse_form(x, flo_mean, i)
+            )
+        # KGE:
+        kge = df.groupby(by = "det_frcst").apply(
+                lambda x:kge_form(x, i)
+            )
 
-# calculate bias:
+        # concatenate and create a dataframe
+        verifs = pd.concat([NSE, kge.droplevel(1)], axis = 1).set_axis([
+            "NSE", "r", "flo_var", "bias", "KGE"], axis = 1
+            )
+        # new index with the fcst_type information:
+        verifs["fcst_type"] = i
 
+        data.append(verifs)
+
+    # end for along fcst_type
+
+    if flo_mean == lo_flo_clim:
+        lo_verif = pd.concat(data)
+    else : hi_verif = pd.concat(data)
+
+lo_verif = lo_verif.set_index(["fcst_type"], append= True
+        ).reorder_levels(["fcst_type", "det_frcst"])
+hi_verif = hi_verif.set_index(["fcst_type"], append= True
+        ).reorder_levels(["fcst_type", "det_frcst"])
+
+# %% implement the KGE first
+
+# %% test the KGE calculation:
+correlation, flow_variability, bias, KGE = kge_form(df = df_med)
+
+# %% Create another bulky database:
+frames = [df_med, df_mean, df_highres]
+result = pd.concat(frames, keys=["median", "mean", "high-res"])
+
+# %% calculate the CRPS:
 
 
 # %% Create time series plot
 # fixes to make:
 #   ensure that lower y limit is 0
 #   scaling based on 
-fig = time_series_plotter(df)
-fig.show(renderer = "browser")
-# fig.show(renderer = "iframe") 
+fig = time_series_plotter(df = t1.reset_index())
+# fig.show(renderer = "browser")
+fig.show(renderer = "iframe") 
 
 #  %% Plot observation time series for all sites:
 # fig2 = plot_obs(obs_dir)
@@ -370,6 +439,7 @@ fig.show(renderer = "browser")
 
 
 # %% create observations vs forecasts plot:
+# very big file 
 fig3 = make_subplots(
         rows = 3, cols = 1,
         shared_xaxes = True,
@@ -390,17 +460,17 @@ for type in fcst_types:
             legend_decide = True
         else : legend_decide = False
 
-        # ENS spread
-        fig3.append_trace(
-            go.Box(x = grouped_df["Obs"], y = grouped_df[type], 
-            line = {"color":"sandybrown"}, legendgroup = "ens_mem",
-            name = "ens spread", showlegend = legend_decide),
-        row = fcst_types.index(type) + 1, col = 1
-        )
+        # # ENS spread
+        # fig3.append_trace(
+        #     go.Box(x = grouped_df["Obs"], y = grouped_df[type], 
+        #     line = {"color":"sandybrown"}, legendgroup = "ens_mem",
+        #     name = "ens spread", showlegend = legend_decide),
+        # row = fcst_types.index(type) + 1, col = 1
+        # )
 
         # add y = x line
         fig3.append_trace(
-            go.Scatter(x = np.arange(0, max(df.Qout.max(),df.Obs.max())), 
+            go.Scattergl(x = np.arange(0, max(df.Qout.max(),df.Obs.max())), 
                     y = np.arange(0, max(df.Qout.max(),df.Obs.max())),
                     name = "y = x", line = {"color":"black"}),
         row = fcst_types.index(type) + 1, col = 1
@@ -408,7 +478,7 @@ for type in fcst_types:
 
         # ENS-MEAN:
         fig3.add_trace(
-            go.Scatter(x = df_mean["Obs"], y = df_mean[type],
+            go.Scattergl(x = df_mean["Obs"], y = df_mean[type],
                     name = "ens mean", mode = 'markers',
                     marker = {"color":"green"}),
         row = fcst_types.index(type) + 1, col = 1
@@ -416,15 +486,15 @@ for type in fcst_types:
 
         # ENS-MEDIAN:
         fig3.add_trace(
-            go.Scatter(x = df_mean["Obs"], y = df_med[type],
+            go.Scattergl(x = df_med["Obs"], y = df_med[type],
                     name = "ens mean", mode = 'markers',
                     marker = {"color":"blue"}),
         row = fcst_types.index(type) + 1, col = 1
         )
 
-        # ENS-MEDIAN:
+        # High-Res:
         fig3.add_trace(
-            go.Scatter(x = df_mean["Obs"], y = df_highres[type],
+            go.Scattergl(x = df_highres["Obs"], y = df_highres[type],
                     name = "ens mean", mode = 'markers',
                     marker = {"color":"red"}),
         row = fcst_types.index(type) + 1, col = 1
