@@ -1,7 +1,6 @@
 # %% 
 # Import necessary modules
 # read netcdf files:
-from numpy.lib.function_base import _diff_dispatcher
 import xarray as xr
 # dataframe and data analysis
 import pandas as pd
@@ -19,7 +18,9 @@ import warnings
 
 #%% Defined functions:
 # create single database from 52 ens. mems. across given time period:
-def df_creator(rt_dir, init_date_list, riv_id, ens_members):
+def df_creator(rt_dir, date_range, riv_id, ens_members):
+    init_date_list  = pd.date_range(start=date_range[0], 
+            end=date_range[1]).strftime("%Y%m%d").values
     fcst_data = []
     for init_date in init_date_list:
         for i in ens_members:
@@ -59,7 +60,7 @@ def df_creator(rt_dir, init_date_list, riv_id, ens_members):
     # concatanate individual mini-dfs to create a dataframe for the time period
     fcst_data = pd.concat(fcst_data)
     fcst_data.set_index(['ens_mem', 'day_no'] , append = True, inplace = True )
-    fcst_data = fcst_data.reorder_levels(["ens_mem", "day_no", "date"])
+    fcst_data = fcst_data.reorder_levels(["ens_mem", "day_no", "date"]).sort_index()
     
     return fcst_data
 
@@ -168,35 +169,53 @@ def kge_form(df, fcst_type = "Q_dmb"):
     
     return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
 
-# create NSE calculation table:
-# THIS MIGHT BE REDUNDANT #
-def nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim):
-    metrics = ["median", "mean", "hi-res"]
-    lo_flo, hi_flo, col_names = [], [], []
-    for j in metrics:
-        # set the deterministic forecast type:
-        if j == "median": df = df_med
-        elif j == "mean": df = df_mean
-        else : df = df_highres 
+# function that calculates deterministic verification metrics:
+def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
+    # defines dataframes for low_flow and high_flow values
+    df_low  = df_det[df_det["Obs"] <= q70_flo]
+    df_high = df_det[df_det["Obs"] > q70_flo]
 
-        # cycle through the raw and bias-corrected forecasts:
+    # loop through the two dataframes to create:
+    for df in [df_low, df_high]:
+        flo_mean = lo_flo_clim if df.equals(df_low) else hi_flo_clim
+        
+        # loop through win len
+        # fcst_Day
+        data = []
         fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+        # loop through the raw and bias corrected forecasts:
         for i in fcst_type:
-            # low flow NSE:
-            NSE = nse_form (df = df[df["Obs"] <= q70_flo], fcst_type=i,
-                    flo_mean = lo_flo_clim)
-            lo_flo.append(NSE)
-            # high flow NSE:
-            NSE = nse_form (df = df[df["Obs"] > q70_flo], fcst_type=i,
-                    flo_mean = hi_flo_clim)
-            hi_flo.append(NSE)
-            # create column names to ease dataframe creation later:
-            col_names.append(j+"_"+ i)
+            # NSE:
+            NSE = df.groupby(by = "det_frcst").apply(
+                    lambda x:nse_form(x, flo_mean, i)
+                )
+            # KGE:
+            kge = df.groupby(by = "det_frcst").apply(
+                    lambda x:kge_form(x, i)
+                )
 
-    NSE = pd.DataFrame([lo_flo, hi_flo], columns = col_names, 
-            index = ['low_flow', 'high_flow']).rename_axis("flow_event")
+            # concatenate and create a dataframe
+            verifs = pd.concat([NSE, kge.droplevel(1)], axis = 1).set_axis([
+                "NSE", "r", "flo_var", "bias", "KGE"], axis = 1
+                )
+            # new index with the fcst_type information:
+            verifs["fcst_type"] = i
 
-    return NSE
+            data.append(verifs)
+
+        # end for along fcst_type
+
+    if flo_mean == lo_flo_clim:
+        lo_verif = pd.concat(data)
+    else : hi_verif = pd.concat(data)
+
+    lo_verif = lo_verif.set_index(["fcst_type"], append= True
+            ).reorder_levels(["fcst_type", "det_frcst"])
+    hi_verif = hi_verif.set_index(["fcst_type"], append= True
+            ).reorder_levels(["fcst_type", "det_frcst"])
+
+    return lo_verif, hi_verif
+
 
 # %% PLOT function
 # function for all the plotting happening:
@@ -332,7 +351,7 @@ site_comID      = pd.read_pickle (r"./Sites_info/sites_tbl.pkl").loc[site].value
 #             pd.date_range(start='20200514', end='20200730').strftime("%Y%m%d").values,
 #             pd.date_range(start='20200801', end='20201215').strftime("%Y%m%d").values 
 #             )
-init_date_list  = pd.date_range(start='20140101', end='20141231').strftime("%Y%m%d").values
+date_range      = ['20140101', '20141231']
 ens_members     = [*range(1,53)]
 
 # forecast day of interest:
@@ -342,19 +361,22 @@ win_len         = 7
 # %% Loop through all the files and create a dataframe:
 try:
     fcst_data = pd.read_pickle("./pickle_dfs/"+site+".pkl")
+    
 except:
     warnings.warn("Pickle file missing. Creating forecast database using \
             individual ensemble files")
-    fcst_data = df_creator(rt_dir, init_date_list, site_comID, ens_members)
+    fcst_data = df_creator(rt_dir, date_range, site_comID, ens_members)
 
 t2 = fcst_data
-
+# 
+fcst_data = fcst_data.sort_index().loc(axis=0)[
+    (slice(None), slice(None), slice(date_range[0], date_range[1]))
+]
 # %% Add observations:
 [fcst_data, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
     place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
 # %% Bias correct the forecasts using DMB and LDMB
-# this works here:
 t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
 # %% Separate dataframes for deterministic forecasts:
@@ -371,49 +393,8 @@ df_det = df_det.droplevel(1)
 df_det.index.names = ["det_frcst"]
 
 # %%
-# defines dataframes for low_flow and high_flow values
-df_low  = df_det[df_det["Obs"] <= q70_flo]
-df_high = df_det[df_det["Obs"] > q70_flo]
-
-# loop through the two dataframes to create:
-for df in [df_low, df_high]:
-    flo_mean = lo_flo_clim if df.equals(df_low) else hi_flo_clim
-    
-    data = []
-    fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
-    # loop through the raw and bias corrected forecasts:
-    for i in fcst_type:
-        # NSE:
-        NSE = df.groupby(by = "det_frcst").apply(
-                lambda x:nse_form(x, flo_mean, i)
-            )
-        # KGE:
-        kge = df.groupby(by = "det_frcst").apply(
-                lambda x:kge_form(x, i)
-            )
-
-        # concatenate and create a dataframe
-        verifs = pd.concat([NSE, kge.droplevel(1)], axis = 1).set_axis([
-            "NSE", "r", "flo_var", "bias", "KGE"], axis = 1
-            )
-        # new index with the fcst_type information:
-        verifs["fcst_type"] = i
-
-        data.append(verifs)
-
-    # end for along fcst_type
-
-    if flo_mean == lo_flo_clim:
-        lo_verif = pd.concat(data)
-    else : hi_verif = pd.concat(data)
-
-lo_verif = lo_verif.set_index(["fcst_type"], append= True
-        ).reorder_levels(["fcst_type", "det_frcst"])
-hi_verif = hi_verif.set_index(["fcst_type"], append= True
-        ).reorder_levels(["fcst_type", "det_frcst"])
-
-# %% implement the KGE first
-
+lo_verif, hi_verif = metric_calc(
+    df_det, q70_flo, lo_flo_clim, hi_flo_clim)
 # %% test the KGE calculation:
 correlation, flow_variability, bias, KGE = kge_form(df = df_med)
 
@@ -499,7 +480,6 @@ for type in fcst_types:
                     marker = {"color":"red"}),
         row = fcst_types.index(type) + 1, col = 1
         )
-
 
 fig3.update_layout(
         title_text = f"forecasts vs observations for {site}",
