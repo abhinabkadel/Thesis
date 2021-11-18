@@ -383,9 +383,6 @@ t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 df = t1.reset_index()
 [df_med, df_mean, df_highres] = det_frcsts(df)
 
-# %% Calculate NSE 
-NSE = nse_calc(df_med, df_mean, df_highres, q70_flo, lo_flo_clim, hi_flo_clim)
-
 # %% concatenate the 3 deterministic forecast matrices to create 
 # a single deterministic dataframe:
 df_det = pd.concat([df_med, df_mean, df_highres], keys=["median", "mean", "high-res"])
@@ -409,7 +406,7 @@ result = pd.concat(frames, keys=["median", "mean", "high-res"])
 # fixes to make:
 #   ensure that lower y limit is 0
 #   scaling based on 
-fig = time_series_plotter(df = t1.reset_index())
+fig = time_series_plotter(df)
 # fig.show(renderer = "browser")
 fig.show(renderer = "iframe") 
 
