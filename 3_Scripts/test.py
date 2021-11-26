@@ -205,14 +205,15 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
 
         # end for along fcst_type
 
-    if flo_mean == lo_flo_clim:
-        lo_verif = pd.concat(data)
-    else : hi_verif = pd.concat(data)
+        if flo_mean == lo_flo_clim:
+            lo_verif = pd.concat(data)
+            # lo_verif = lo_verif.set_index(["fcst_type"], append= True
+            #     ).reorder_levels(["fcst_type", "det_frcst"])
 
-    lo_verif = lo_verif.set_index(["fcst_type"], append= True
-            ).reorder_levels(["fcst_type", "det_frcst"])
-    hi_verif = hi_verif.set_index(["fcst_type"], append= True
-            ).reorder_levels(["fcst_type", "det_frcst"])
+        else : 
+            hi_verif = pd.concat(data)
+            # hi_verif = hi_verif.set_index(["fcst_type"], append= True
+            #     ).reorder_levels(["fcst_type", "det_frcst"])
 
     return lo_verif, hi_verif
 
@@ -334,7 +335,6 @@ def plot_obs(obs_dir):
 
     return fig 
 
-
 # %% Initialization of variables
 # site name and associated comID:
 site            = "Marsyangdi"
@@ -372,28 +372,57 @@ t2 = fcst_data
 fcst_data = fcst_data.sort_index().loc(axis=0)[
     (slice(None), slice(None), slice(date_range[0], date_range[1]))
 ]
+
+#############################################
+###### forecast day affects here:
 # %% Add observations:
 [fcst_data, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
     place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
-# %% Bias correct the forecasts using DMB and LDMB
-t1 = bc_fcsts(df = fcst_data, win_len = win_len )
+# %% test function for window change:
+##############################################
+###### window_length starts affecting here:
+def win_changer(fcst_data, win_len):
 
-# %% Separate dataframes for deterministic forecasts:
-df = t1.reset_index()
-[df_med, df_mean, df_highres] = det_frcsts(df)
+    # Bias correct the forecasts using DMB and LDMB
+    t1 = bc_fcsts(df = fcst_data, win_len = win_len )
 
-# %% concatenate the 3 deterministic forecast matrices to create 
-# a single deterministic dataframe:
-df_det = pd.concat([df_med, df_mean, df_highres], keys=["median", "mean", "high-res"])
-df_det = df_det.droplevel(1)
-df_det.index.names = ["det_frcst"]
+    # Separate dataframes for deterministic forecasts:
+    # df = t1.reset_index()
+    [df_med, df_mean, df_highres] = det_frcsts(t1.reset_index())
+
+    # concatenate the 3 deterministic forecast matrices to create 
+    # a single deterministic dataframe:
+    df_det = pd.concat([df_med, df_mean, df_highres], keys=["median", "mean", "high-res"])
+    df_det = df_det.droplevel(1)
+    df_det.index.names = ["det_frcst"]
+
+    # calculate the metrics:
+    lo_verif, hi_verif = metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim)
+
+    return lo_verif, hi_verif
+# %%
+windows = [2, 3, 5, 7, 10, 15, 20, 30]
+lo_verif = []
+hi_verif = []
+
+for win_len in windows:
+    lo_df, hi_df = win_changer(fcst_data, win_len)
+    lo_df["win_length"] = win_len
+    hi_df["win_length"] = win_len 
+    lo_verif.append(lo_df) 
+    hi_verif.append(hi_df)
 
 # %%
-lo_verif, hi_verif = metric_calc(
-    df_det, q70_flo, lo_flo_clim, hi_flo_clim)
-# %% test the KGE calculation:
-correlation, flow_variability, bias, KGE = kge_form(df = df_med)
+lo_verif = pd.concat(lo_verif)
+hi_verif = pd.concat(hi_verif)
+
+# %%
+lo_verif = lo_verif.set_index(["win_length"], append= True
+                ).reorder_levels(["win_length", "fcst_type", "det_frcst"])
+hi_verif = hi_verif.set_index(["win_length"], append= True
+                ).reorder_levels(["win_length", "fcst_type", "det_frcst"])
+
 
 # %% Create another bulky database:
 frames = [df_med, df_mean, df_highres]
@@ -401,14 +430,14 @@ result = pd.concat(frames, keys=["median", "mean", "high-res"])
 
 # %% calculate the CRPS:
 
-
-# %% Create time series plot
-# fixes to make:
-#   ensure that lower y limit is 0
-#   scaling based on 
-fig = time_series_plotter(df)
-# fig.show(renderer = "browser")
-fig.show(renderer = "iframe") 
+def main_plots():
+    # %% Create time series plot
+    # fixes to make:
+    #   ensure that lower y limit is 0
+    #   scaling based on 
+    fig = time_series_plotter(df)
+    # fig.show(renderer = "browser")
+    fig.show(renderer = "iframe") 
 
 #  %% Plot observation time series for all sites:
 # fig2 = plot_obs(obs_dir)
