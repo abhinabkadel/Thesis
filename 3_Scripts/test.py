@@ -8,6 +8,7 @@ import numpy as np
 # error metric calculations:
 from hydrostats import HydroErr
 from scipy import stats
+import xskillscore as xs
 # use os commands:
 import os 
 # make plots:
@@ -416,20 +417,61 @@ for win_len in windows:
 # %%
 lo_verif = pd.concat(lo_verif)
 hi_verif = pd.concat(hi_verif)
-
-# %%
-lo_verif = lo_verif.set_index(["win_length"], append= True
-                ).reorder_levels(["win_length", "fcst_type", "det_frcst"])
-hi_verif = hi_verif.set_index(["win_length"], append= True
-                ).reorder_levels(["win_length", "fcst_type", "det_frcst"])
-
-
-# %% Create another bulky database:
-frames = [df_med, df_mean, df_highres]
-result = pd.concat(frames, keys=["median", "mean", "high-res"])
+lo_verif = lo_verif.set_index(["win_length", "fcst_type"], append= True
+                ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
+hi_verif = hi_verif.set_index(["win_length", "fcst_type"], append= True
+                ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
 
 # %% calculate the CRPS:
+## more work to do on the crps syntax 
+## check the other crps implementations??
+t1 = bc_fcsts(df = fcst_data, win_len = win_len )
+df = t1.reset_index()
 
+
+xs.crps_ensemble()
+
+# %%
+df_big = hi_verif.xs('median', level = 2)
+# df = hi_verif.xs('median', level = 2).reset_index()
+
+# make subplot interface
+fig = make_subplots(rows = 2, cols = 1,
+                    shared_xaxes = True,
+                    shared_yaxes = True,
+                    vertical_spacing = 0.09,
+                    subplot_titles=("DMB", "LDMB"),
+                    x_title = "window_length",
+                    y_title = "Score"    
+                    )
+# Add figure and legend title                  
+fig.update_layout(
+    title_text = "Scores for different window lengths"+
+        f"<br> site = {site}, day = {day}",
+    title_x = 0.5,
+    legend_title = "Legend", 
+    yaxis_rangemode = "tozero"
+    )
+# loop through the forecast types:
+fcst_types = ["Q_dmb", "Q_ldmb"]
+for type in fcst_types:
+    df = df_big.xs(type, level = 1)
+    # legend_decide = True if type == "Qout" else False
+
+    metrics = ["NSE", "r", "flo_var", "bias", "KGE"]
+    for metric in metrics: 
+        # plot different metrics:
+        fig.append_trace( 
+            go.Scatter(x = df.index, 
+                    y = df[metric], 
+                    name = metric,
+                    ),
+            row = fcst_types.index(type) + 1, col = 1
+        )
+
+fig.show()
+
+# %%
 def main_plots():
     # %% Create time series plot
     # fixes to make:

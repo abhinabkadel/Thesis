@@ -30,10 +30,10 @@ def Nepal_extractor(Q_file, npl):
 
 # %%
 src_rt      = r"wfrt:/reforecasts-2/"
-src_dir     = pd.date_range(start='20160223', end='20191231').strftime("%Y%m%d.%H").values
-dst_rt      = "/Users/akadel/Documents/Kadel/Thesis/Fcst_data"
+src_dir     = pd.date_range(start='20140214', end='20141231').strftime("%Y%m%d.%H").values
+dst_rt      = "/Users/akadel/Documents/Kadel/Thesis/1_Data/Fcst_data"
 # rclone_cmd  = "rclone copy --verbose --update --progress --dry-run "
-mappath 	= "./GIS_data/Nepal-GIS_files/Nepal-boundary/data/Outline.shp"
+mappath 	= "./1_Data/GIS_data/Nepal-GIS_files/Nepal-boundary/data/Outline.shp"
 rclone_cmd  = "rclone copy --verbose --update --progress "
 
 # %% load the shapefile for map of Nepal
@@ -43,7 +43,7 @@ npl  = gpd.read_file(mappath)
 for folder in src_dir:
     print(folder)
     print("\n")
-    for i in [*range(1,52), 52]:
+    for i in [range(16,52)]:
     # for i in [1]:
         print(i)
         fname   = f"Qout_south_asia_mainland_{i:d}.nc"
