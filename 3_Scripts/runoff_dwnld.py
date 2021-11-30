@@ -36,14 +36,17 @@ grdpts_pd = pd.DataFrame (data = grdpts, index=None,
 nepal_bounds = npl.bounds
 
 # narrow down the points to those around Nepal only:
-data.sel(
+data = data.sel(
         lon=slice(nepal_bounds.minx.values[0], nepal_bounds.maxx.values[0]),
         lat=slice(nepal_bounds.maxy.values[0], nepal_bounds.miny.values[0])
 ) 
 
-
+# %%
+exportfname = f"runoff_{i:d}.nc"
+data.to_netcdf(path = src_rt + folder + "/" + exportfname)
 
 # # %%
+
 
 # fig, ax1 = plt.subplots()
 # plt.xlabel('longitude')
@@ -67,3 +70,4 @@ data.sel(
 # # %%
 
 # # %%
+# %%
