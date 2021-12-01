@@ -5,6 +5,9 @@
 		}
 	],
 	"settings": {
-		"jupyter.jupyterServerType": "local"
+		"python.terminal.executeInFileDir": true,
+		"jupyter.jupyterServerType": "local",
+		"jupyter.notebookFileRoot": "${fileDirname}"
+	
 	}
 }
