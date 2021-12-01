@@ -2,6 +2,23 @@
     This module contains all the functions used to set up
     the post-processing of the streamflow forecasts:
 """
+######### Dependednt Modules ###########
+# Import necessary modules
+# read netcdf files:
+import xarray as xr
+# dataframe and data analysis
+import pandas as pd
+import numpy as np
+# error metric calculations:
+from hydrostats import HydroErr
+from scipy import stats
+import xskillscore as xs
+# use os commands:
+import os 
+# print warnings:
+import warnings
+
+
 # create single pandas dataframe from 52 ens. mems. across given 
 # time period:
 def df_creator(rt_dir, date_range, riv_id, ens_members):
