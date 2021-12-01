@@ -15,8 +15,6 @@ from scipy import stats
 import xskillscore as xs
 # use os commands:
 import os 
-# print warnings:
-import warnings
 
 
 # create single pandas dataframe from 52 ens. mems. across given 
@@ -230,10 +228,10 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
 
     return lo_verif, hi_verif
 
-# Integrate overall bias correction process in the :
+# Integrate overall bias correction process in the function :
 ##############################################
 ###### window_length starts affecting here:
-def post_process(fcst_data, win_len):
+def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
 
     # Bias correct the forecasts using DMB and LDMB
     t1 = bc_fcsts(df = fcst_data, win_len = win_len )
@@ -246,3 +244,5 @@ def post_process(fcst_data, win_len):
     lo_verif, hi_verif = metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim)
 
     return lo_verif, hi_verif
+
+
