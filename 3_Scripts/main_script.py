@@ -3,6 +3,7 @@ import pandas as pd
 import warnings
 # import all functions:
 from calc_funcs import *
+from plt_funcs import *
 # make plots:
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -20,7 +21,7 @@ def get_fcst_data ():
     obs_dir         = r"../1_Data/obs_data"
     site_comID      = pd.read_pickle (r"./Sites_info/sites_tbl.pkl").loc[site].values[0]
     # date list of interest:
-    date_range      = ['20140101', '20141231']
+    date_range      = ['20150101', '20151231']
     ens_members     = [*range(1,53)]
 
     try:
@@ -55,7 +56,7 @@ def fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim):
     hi_verif = []
 
     for win_len in windows:
-        lo_df, hi_df =  post_process(fcst_data, win_len, 
+        lo_df, hi_df, bc_df =  post_process(fcst_data, win_len, 
                             q70_flo, lo_flo_clim, hi_flo_clim)
         lo_df["win_length"] = win_len
         hi_df["win_length"] = win_len 
@@ -136,22 +137,118 @@ def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
 lo_verif, hi_verif = fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim)
 
 # %% plot the calibration curves:
+# %% ######################################### %% #
+############## Verif Metrics Plot #################
 flo_conditions = ["low", "high"]
 for flo_con in flo_conditions:
     fig = calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = flo_con)
     fig.show()
 
-# %% ######################################### %% #
-############## Verif Metrics Plot #################
+#%% single forecast day only:
+day             = 1
+win_len         = 2
 
+# 
+site, obs_dir, fcst_data = get_fcst_data ()
 
+# add observations
+[fcst_data, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
+    place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
+# bias correct and return 2 deterministic forecast outputs and 
+# also the overall bias corrected dataframe:
+lo_df, hi_df, bc_df =  post_process(fcst_data, win_len, 
+                            q70_flo, lo_flo_clim, hi_flo_clim)
 
+# %% All three in a subplot
+# create plots
+fig = time_series_plotter(bc_df.reset_index(), site, day, win_len)
+fig.show(renderer = "iframe")
 
-fig.show()
+# %% Only the individual forecasts:
+fig = go.Figure(
+    layout = {
+        "xaxis_title" : "date",
+        "yaxis_title" : "River discharge (<i>m<sup>3</sup>/s</i>)"    
+    }  
+    )
 
-# %%
-# forecast day of interest:
-day             = 2
-win_len         = 7
+# Add figure and legend title                  
+fig.update_layout(
+    title_text = "Bias-correction for streamflow forecasts"+
+        f"<br> site = {site}, forecast horizon = {day}, window = {win_len}",
+    title_x = 0.5,
+    legend_title = "Legend", 
+    yaxis_rangemode = "tozero"
+    )
 
+type = "Qout"
+# bc_df = bc_df.reset_index()
+# add ENSEMBLE SPREAD    
+fig.add_trace(
+    go.Box(x = bc_df["date"], y=bc_df[type], line = {"color":"rosybrown"},
+    name = "ensemble spread", legendgroup = "ens")
+)
+
+# plot HIGH-RES
+fig.add_trace( 
+    go.Scatter(x = bc_df[bc_df["ens_mem"] == 52]["date"], 
+            y = bc_df[bc_df["ens_mem"] == 52][type],
+            name = "high res", line = {"color":"blue"},
+            legendgroup = "high-res")
+)
+
+# plot ENS-MEDIAN
+fig.add_trace( 
+    go.Scatter(x = bc_df.groupby(by = "date").median().index,
+            y = bc_df.groupby(by = "date").median()[type],
+            name = "ensemble median", line = {"color":"cyan"},
+            legendgroup = "ens-med")
+)
+
+# plot ENS-MEAN
+fig.add_trace( 
+    go.Scatter(x = bc_df.groupby(by = "date").mean().index,
+            y = bc_df.groupby(by = "date").mean()[type],
+            name = "ensemble mean", line = {"color":"green"},
+            legendgroup = "ens-mean")
+)
+
+# plot OBS:
+fig.add_trace(
+        go.Scatter(x = bc_df[bc_df["ens_mem"] == 52]["date"],
+            y=bc_df[bc_df["ens_mem"] == 52]["Obs"], name = "observed",
+            line = {"color":"red"}, mode = "lines+markers", 
+            legendgroup = "obs")
+)
+
+fig.show(renderer = "iframe")
+# %% loop through different forecast days for calibration:
+site, obs_dir, fcst_data = get_fcst_data ()
+days = [5, 7, 9, 10]
+for day in days:
+    # add observations:
+    [fcst_data_day, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
+    place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
+
+    # optimum calibration:
+    lo_verif, hi_verif = fcst_calibrator (fcst_data_day, q70_flo, lo_flo_clim, hi_flo_clim)
+
+    flo_conditions = ["low", "high"]
+    for flo_con in flo_conditions:
+        fig = calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = flo_con)
+        fig.show()
+
+# %% loop through different forecast days for verification:
+site, obs_dir, fcst_data = get_fcst_data ()
+days = [9]
+win_len = 5
+for day in days:
+    # add observations:
+    [fcst_data_day, q70_flo, lo_flo_clim, hi_flo_clim] = add_obs(
+    place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
+
+    # bias correct and return 2 deterministic forecast outputs and 
+    # also the overall bias corrected dataframe:
+    lo_df, hi_df, bc_df =  post_process(fcst_data_day, win_len, 
+                            q70_flo, lo_flo_clim, hi_flo_clim)

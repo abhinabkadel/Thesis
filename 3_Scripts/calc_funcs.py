@@ -234,15 +234,15 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
 def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
 
     # Bias correct the forecasts using DMB and LDMB
-    t1 = bc_fcsts(df = fcst_data, win_len = win_len )
+    bc_df = bc_fcsts(df = fcst_data, win_len = win_len )
 
     # Separate dataframes for deterministic forecasts:
     # df = t1.reset_index()
-    df_det = det_frcsts(t1.reset_index())
+    df_det = det_frcsts(bc_df.reset_index())
 
     # calculate the metrics:
     lo_verif, hi_verif = metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim)
 
-    return lo_verif, hi_verif
+    return lo_verif, hi_verif, bc_df
 
 
