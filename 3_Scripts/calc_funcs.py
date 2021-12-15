@@ -10,7 +10,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 # error metric calculations:
-from hydrostats import HydroErr
+from hydrostats.ens_metrics import ens_crps
 from scipy import stats
 import xskillscore as xs
 # use os commands:
@@ -228,6 +228,58 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
 
     return lo_verif, hi_verif
 
+# calculate probabilistic verification metrics:
+def prob_metrics(bc_df, q70_flo):
+    
+    prob_verif = []
+    # loop through the two dataframes to create:
+    for flo_con in ["low", "high"]:
+
+        # define the subset of dataset to workn with:
+        if flo_con == "low":
+            df  = bc_df[bc_df["Obs"] <= q70_flo]
+        else :
+            df  = bc_df[bc_df["Obs"] > q70_flo]
+
+        fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+        crps_vals = []
+        # loop through the raw and bias corrected forecasts:
+        for i in fcst_type:
+
+            ## CRPS Hydrostats:
+            # frcsts  = df[["Q_dmb"]].reset_index().pivot(
+            #     index = "date", columns = "ens_mem", values = "Q_dmb").values
+            # obs     = df.xs(key = 52)["Obs"].values
+
+            # crps = ens_crps(obs, frcsts)
+            print(i)
+            # CRPS xskillscore 
+            ds           = df.xs(key = 52)[["Obs"]].to_xarray()
+            ds['frcsts'] = df.reorder_levels(["date", "ens_mem"]) \
+                                .sort_index().to_xarray()[i]
+            ds      = ds.rename_dims({"ens_mem":"member"})
+            crps    = ds.xs.crps_ensemble('Obs', 'frcsts').values
+
+            crps_vals.append(crps)
+            
+            # end for along fcst_type
+
+        # create a dataframe out of 
+        data = pd.DataFrame(
+            {"fcst_type":fcst_type, 
+            "crps":np.array(crps_vals)}
+        )
+        # add a column about the flow climatology information:
+        data["flow_clim"] = flo_con 
+        prob_verif.append(data)
+
+    # end for along flow climatology
+    prob_verif = pd.concat(prob_verif)
+    prob_verif = prob_verif.set_index(["flow_clim", "fcst_type"], 
+                append= True).droplevel(0).sort_index()
+
+    return prob_verif
+
 # Integrate overall bias correction process in the function :
 # input df already contains observations as well
 def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
@@ -242,7 +294,10 @@ def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
     # calculate the metrics:
     lo_verif, hi_verif = metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim)
 
-    return lo_verif, hi_verif, bc_df
+    # calculate probabilitic verification (CRPS):
+    prob_verif = prob_metrics(bc_df, q70_flo)
+
+    return lo_verif, hi_verif, bc_df, prob_verif
 
 # forecast calibration:
 def fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim):

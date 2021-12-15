@@ -4,10 +4,6 @@ import warnings
 # import all functions:
 from calc_funcs import *
 from plt_funcs import *
-# make plots:
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import plotly.colors as pc
 
 
 # %% 
@@ -85,7 +81,7 @@ for day in days:
 # ----------------- ******************* --------------------- #
 # %%  
 
-days = [1]
+day = 1
 win_len = 3
 
 # add observations:
@@ -94,14 +90,14 @@ place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
 
 # bias correct and return 2 deterministic forecast outputs and 
 # also the overall bias corrected dataframe:
-lo_df, hi_df, bc_df =  post_process(df_data, win_len, 
+lo_df, hi_df, bc_df, prob_verif =  post_process(df_data, win_len, 
                         q70_flo, lo_flo_clim, hi_flo_clim)
 
-# %% Implement CRPS
-from hydrostats.ens_metrics import ens_crps
+
+# %% 
 
 
-
+    
 # %% ######################################### %% #
 ############## All Plot Functions #################
 # 3 in 1 subplot:
