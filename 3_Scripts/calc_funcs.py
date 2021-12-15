@@ -134,7 +134,7 @@ def bc_fcsts(df, win_len):
 
     return df
 
-# function to create determininstic forecasts:
+# function to create determininstic forecasts (mean, median and high-res):
 def det_frcsts (df):    
     # ensemble median:
     df_med  = df.groupby(by = "date").median().reset_index() \
@@ -162,7 +162,7 @@ def nse_form(df, flo_mean, fcst_type = "Q_dmb"):
         ( np.nansum( (df["Obs"].values - flo_mean) **2 ) )
     return NSE
 
-# correlation, bias and flow variability:
+# KGE + correlation, bias and flow variability:
 def kge_form(df, fcst_type = "Q_dmb"):
     # calculate pearson coefficient:
     correlation      = HydroErr.pearson_r(df[fcst_type], df["Obs"])
@@ -180,7 +180,7 @@ def kge_form(df, fcst_type = "Q_dmb"):
     
     return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
 
-# function that calculates deterministic verification metrics:
+# calculate deterministic verification metrics:
 def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
     # defines dataframes for low_flow and high_flow values
     df_low  = df_det[df_det["Obs"] <= q70_flo]
@@ -229,8 +229,7 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
     return lo_verif, hi_verif
 
 # Integrate overall bias correction process in the function :
-##############################################
-###### window_length starts affecting here:
+# input df already contains observations as well
 def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
 
     # Bias correct the forecasts using DMB and LDMB
@@ -245,4 +244,27 @@ def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
 
     return lo_verif, hi_verif, bc_df
 
+# forecast calibration:
+def fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim):
 
+    windows = [2, 3, 5, 7, 10, 15, 20, 30]
+    lo_verif = []
+    hi_verif = []
+
+    for win_len in windows:
+        lo_df, hi_df, bc_df =  post_process(fcst_data, win_len, 
+                            q70_flo, lo_flo_clim, hi_flo_clim)
+        lo_df["win_length"] = win_len
+        hi_df["win_length"] = win_len 
+        lo_verif.append(lo_df) 
+        hi_verif.append(hi_df)
+
+    # create a single large dataframe for low and high flow seasons:
+    lo_verif = pd.concat(lo_verif)
+    hi_verif = pd.concat(hi_verif)
+    lo_verif = lo_verif.set_index(["win_length", "fcst_type"], append= True
+                    ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
+    hi_verif = hi_verif.set_index(["win_length", "fcst_type"], append= True
+                    ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
+
+    return lo_verif, hi_verif
