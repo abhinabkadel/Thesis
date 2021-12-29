@@ -11,11 +11,11 @@ import pandas as pd
 import numpy as np
 # error metric calculations:
 from hydrostats.ens_metrics import ens_crps
+from hydrostats import HydroErr
 from scipy import stats
 import xskillscore as xs
 # use os commands:
 import os 
-
 
 # create single pandas dataframe from 52 ens. mems. across given 
 # time period:
@@ -85,7 +85,15 @@ def add_obs(place, obs_dir, day, fcst_df):
                     [["Qout","init_date"]],
                     obs, left_index=True, 
                     right_index=True).sort_index()
-    return df, q70_flo, lo_flo_clim, hi_flo_clim
+
+    # create a python dictionary with the observed values:
+    clim_vals = {
+        "q70_flo"       : q70_flo,
+        "lo_flo_clim"   : lo_flo_clim,
+        "hi_flo_clim"   : hi_flo_clim
+    }
+
+    return df, clim_vals
 
 # calculate Degree of Mass Balance (DMB):
 def dmb_calc(df, window, weight = False):
@@ -181,14 +189,15 @@ def kge_form(df, fcst_type = "Q_dmb"):
     return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
 
 # calculate deterministic verification metrics:
-def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
+def metric_calc(df_det, clim_vals):
     # defines dataframes for low_flow and high_flow values
-    df_low  = df_det[df_det["Obs"] <= q70_flo]
-    df_high = df_det[df_det["Obs"] > q70_flo]
+    df_low  = df_det[df_det["Obs"] <= clim_vals["q70_flo"]]
+    df_high = df_det[df_det["Obs"] > clim_vals["q70_flo"]]
 
     # loop through the two dataframes to create:
     for df in [df_low, df_high]:
-        flo_mean = lo_flo_clim if df.equals(df_low) else hi_flo_clim
+        flo_mean = clim_vals["lo_flo_clim"] if df.equals(df_low) \
+            else clim_vals["hi_flo_clim"]
         
         # loop through win len
         # fcst_Day
@@ -216,7 +225,7 @@ def metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim):
 
         # end for along fcst_type
 
-        if flo_mean == lo_flo_clim:
+        if flo_mean == clim_vals["lo_flo_clim"]:
             lo_verif = pd.concat(data)
             # lo_verif = lo_verif.set_index(["fcst_type"], append= True
             #     ).reorder_levels(["fcst_type", "det_frcst"])
@@ -282,7 +291,7 @@ def prob_metrics(bc_df, q70_flo):
 
 # Integrate overall bias correction process in the function :
 # input df already contains observations as well
-def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
+def post_process(fcst_data, win_len, clim_vals):
 
     # Bias correct the forecasts using DMB and LDMB
     bc_df = bc_fcsts(df = fcst_data, win_len = win_len )
@@ -292,15 +301,15 @@ def post_process(fcst_data, win_len, q70_flo, lo_flo_clim, hi_flo_clim):
     df_det = det_frcsts(bc_df.reset_index())
 
     # calculate the metrics:
-    lo_verif, hi_verif = metric_calc(df_det, q70_flo, lo_flo_clim, hi_flo_clim)
+    lo_verif, hi_verif = metric_calc(df_det, clim_vals)
 
     # calculate probabilitic verification (CRPS):
-    prob_verif = prob_metrics(bc_df, q70_flo)
+    prob_verif = prob_metrics(bc_df, clim_vals["q70_flo"])
 
     return lo_verif, hi_verif, bc_df, prob_verif
 
 # forecast calibration:
-def fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim):
+def fcst_calibrator (fcst_data, clim_vals):
 
     windows = [2, 3, 5, 7, 10, 15, 20, 30]
     lo_verif = []
@@ -308,7 +317,7 @@ def fcst_calibrator (fcst_data, q70_flo, lo_flo_clim, hi_flo_clim):
 
     for win_len in windows:
         lo_df, hi_df, bc_df =  post_process(fcst_data, win_len, 
-                            q70_flo, lo_flo_clim, hi_flo_clim)
+                            clim_vals)
         lo_df["win_length"] = win_len
         hi_df["win_length"] = win_len 
         lo_verif.append(lo_df) 
