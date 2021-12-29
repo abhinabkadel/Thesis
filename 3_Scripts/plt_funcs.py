@@ -1,6 +1,7 @@
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import pandas as pd
+import plotly.colors as pc
 
 ## TIME SERIES PLOTS (Flow vs Time):
 # time series for all 3 bias correction options:
@@ -209,3 +210,50 @@ def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
 #
 
 
+## Plot the variation of DMB:
+# 
+def dmb_vars_plttr (bc_df, dmb_vars):
+    fig = go.Figure(
+        layout = {
+            "xaxis_title"   : "date",
+            "yaxis_title"   : "DMB ratio",    
+            "title"         : "Time series progression of DMB values",
+            "title_x"       : 0.5
+        }  
+    )
+
+    color       = pc.qualitative.D3
+    dmb_vars    = ["DMB", "LDMB", "DMB-var", "LDMB-var"]
+    for name in dmb_vars:
+        # plot all DMB tracers
+        # fig.add_trace(
+        #     go.Scatter(x = bc_df.reset_index()["date"], 
+        #                 y = bc_df[name],
+        #                 name = name, opacity = 0.6
+
+        #         )
+        # )
+
+        group_df = bc_df.groupby("date").agg(['min', 'max'])[name]
+
+        # add the maximum DMB values
+        fig.add_trace(
+            go.Scatter(x = group_df.reset_index()["date"], 
+                        y = group_df["max"],
+                        name = name, opacity = 0.6, 
+                        marker_color = color[dmb_vars.index(name)] , 
+                        legendgroup = name, showlegend = False
+            )
+        )    
+
+        # add the minimum DMB values and fill in between 
+        fig.add_trace(
+            go.Scatter(x = group_df.reset_index()["date"], 
+                        y = group_df["min"],
+                        name = name, opacity = 0.6, 
+                        marker_color = color[dmb_vars.index(name)], 
+                        legendgroup = name, fill = "tonexty"
+                )
+        )    
+        
+        return fig
