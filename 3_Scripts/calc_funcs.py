@@ -41,6 +41,7 @@ def df_creator(rt_dir, date_range, riv_id, ens_members):
             df    = Qfcst.Qout.to_dataframe()
             df    = df.resample('D').mean()
             df.index.names = ['date']
+            df = df.rename(columns={"Qout":"Q_raw"})
 
             # set the ensemble value based on the range index
             df['ens_mem'] = i
@@ -82,7 +83,7 @@ def add_obs(place, obs_dir, day, fcst_df):
     # merge the forecasts and the observations datasets together. 
     # perform a left join with fcsts being the left parameter:
     df = pd.merge( fcst_df.xs(key = day, level = "day_no")
-                    [["Qout","init_date"]],
+                    [["Q_raw","init_date"]],
                     obs, left_index=True, 
                     right_index=True).sort_index()
 
@@ -105,7 +106,7 @@ def dmb_calc(df, window, weight = False):
         Q_wins = []
         Obs_wins = []
         # add rolling values of observations and raw forecasts to the list 
-        df['Qout'].rolling(window).apply(lambda x:Q_wins.append(x.values) or 0)
+        df['Q_raw'].rolling(window).apply(lambda x:Q_wins.append(x.values) or 0)
         df['Obs'].rolling(window).apply(lambda x:Obs_wins.append(x.values) or 0)
         # convert both lists to (N_days - win_len + 1) x win_len 2d numpy arrays and then 
         # calculate the DMB parameter:
@@ -118,7 +119,7 @@ def dmb_calc(df, window, weight = False):
         return df
 
     else:
-        return df.Qout.rolling(window).sum().values / df.Obs.rolling(window).sum().values
+        return df.Q_raw.rolling(window).sum().values / df.Obs.rolling(window).sum().values
 
 # Bias correct forecasts (each ensemble member is independent) :
 def bc_fcsts(df, win_len):     
@@ -132,12 +133,12 @@ def bc_fcsts(df, win_len):
     # new column for un-weighted DMB bias correction: 
     df = df.groupby(by = "ens_mem", dropna = False).     \
         apply(lambda df:df.assign(
-            Q_dmb = df["Qout"].values / df["DMB"].shift(periods=1).values )
+            Q_dmb = df["Q_raw"].values / df["DMB"].shift(periods=1).values )
             ).sort_index()
     # new column for weighted DMB bias correction:
     df = df.groupby(by = "ens_mem", dropna = False).     \
         apply(lambda df:df.assign(
-            Q_ldmb = df["Qout"].values / df["LDMB"].shift(periods=1).values )
+            Q_ldmb = df["Q_raw"].values / df["LDMB"].shift(periods=1).values )
             ).sort_index()
 
     return df
@@ -146,13 +147,13 @@ def bc_fcsts(df, win_len):
 def det_frcsts (df):    
     # ensemble median:
     df_med  = df.groupby(by = "date").median().reset_index() \
-    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
     # ensemble mean:
     df_mean = df.groupby(by = "date").mean().reset_index() \
-        [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+        [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
     # high-res forecast
     df_highres = df[df["ens_mem"] == 52] \
-    [["date","Obs","Qout","Q_dmb", "Q_ldmb"]]
+    [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
 
     # concatenate the 3 deterministic forecast matrices to create 
     # a single deterministic dataframe:
@@ -202,7 +203,7 @@ def metric_calc(df_det, clim_vals):
         # loop through win len
         # fcst_Day
         data = []
-        fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+        fcst_type = ["Q_raw", "Q_dmb", "Q_ldmb"]
         # loop through the raw and bias corrected forecasts:
         for i in fcst_type:
             # NSE:
@@ -250,7 +251,7 @@ def prob_metrics(bc_df, q70_flo):
         else :
             df  = bc_df[bc_df["Obs"] > q70_flo]
 
-        fcst_type = ["Qout", "Q_dmb", "Q_ldmb"]
+        fcst_type = ["Q_raw", "Q_dmb", "Q_ldmb"]
         crps_vals = []
         # loop through the raw and bias corrected forecasts:
         for i in fcst_type:
