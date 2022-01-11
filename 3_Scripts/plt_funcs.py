@@ -1,5 +1,6 @@
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+import numpy as np
 import pandas as pd
 import plotly.colors as pc
 
@@ -25,9 +26,9 @@ def time_series_plotter(df, site, day, win_len):
         yaxis_rangemode = "tozero"
         )
     # loop through the forecast types:
-    fcst_types = ["Qout", "Q_dmb", "Q_ldmb"]
+    fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]
     for type in fcst_types:
-        legend_decide = True if type == "Qout" else False
+        legend_decide = True if type == "Q_raw" else False
 
         # plot ENSEMBLE SPREAD    
         fig.append_trace(
@@ -200,11 +201,96 @@ def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
 
 
 ## FORECAST VS OBSERVATION PLOTS (Flow vs Flow):
-#
+def scatter_plttr (df_det, bc_df, clim_vals, day, site,
+                fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"],
+                renderer = "") :
 
-#
+    # Creates forecast vs observation scatter plots. 
+    # Individual scatter plot created for a forecast type, 
+    # forecast horizon, site and flow conditions
+    for fcst_type in fcst_types:
+        flo_events = ["high", "low"]
+        for flo_event in flo_events:
+            
+            # Plot the forecast vs observation for each initialised date 
+            fig = go.Figure(
+                layout = {
+                    "xaxis_title"   : "observations (<i>m<sup>3</sup>/s</i>)",
+                    "yaxis_title"   : "forecasted discharge (<i>m<sup>3</sup>/s</i>)",    
+                    "title"         : "<b> Forecasts vs Observations Scatter </b> <br> " + 
+                                    "<sup> forecat type = " + fcst_type[2:] +
+                                    " | forecast horizon = " + str(day) + 
+                                    " | site = " + site +
+                                    "<br>flow conditions = " + flo_event,
+                    "title_x"       : 0.5        
+                }
+            )
 
-#
+            # possibility to change the axes to logarithmic
+            # fig.update_xaxes(type="log")
+            # fig.update_yaxes(type="log", range = [2.2,3.56], dtick = "L200")
+
+            if flo_event == "high":
+                df  = bc_df[bc_df["Obs"] > clim_vals["q70_flo"]]
+            else : df  = bc_df[bc_df["Obs"] < clim_vals["q70_flo"]]
+
+            # add y = x line
+            fig.add_trace(
+                go.Scattergl(
+                    x = np.arange(
+                            df.Obs.min()*0.95, 
+                            min( df.Q_raw.max(),df.Obs.max() ) * 1.05
+                        ), 
+                    y = np.arange(
+                            min( df.Q_raw.min(),df.Obs.min() ), 
+                            min( df.Q_raw.max(),df.Obs.max() )
+                        ),
+                        name = "y = x", line = {"color":"black"})
+            )
+
+            # Ensemble spread for each date
+            for date, grouped_df in df.groupby('date'): 
+                # only one legend entry for the multiple box plots
+                legend_decide = True if date == df.index.get_level_values(1)[0] \
+                    else False
+
+                fig.add_trace(
+                    go.Box(x = grouped_df["Obs"], y = grouped_df[fcst_type], 
+                    line = {"color":"rosybrown"}, legendgroup = "ens_mem",
+                    name = "ens spread", showlegend = legend_decide)
+                )
+
+            # Deterministic forecasts 
+            if flo_event == "high":
+                df  = df_det[df_det["Obs"] > clim_vals["q70_flo"]] 
+            else : 
+                df  = df_det[df_det["Obs"] < clim_vals["q70_flo"]] 
+
+            # matrix of colors for individual deterministic forecast types:
+            colors = iter(["cyan", "green", "blue"])
+            
+            for det_type, group in df.groupby(by = "det_frcst"):
+                # one color for each forecast type
+                colr_val = next(colors)
+
+                # loop through each date:
+                for date, grouped_df in df.groupby('date'): 
+                    # only one legend entry for the multiple box plots
+                    legend_decide = True if date == df['date'][0] \
+                        else False
+                    fig.add_trace(
+                        go.Scattergl(x = grouped_df["Obs"], y = grouped_df[fcst_type],
+                            name = det_type, mode = 'markers', legendgroup = det_type,
+                            marker = {"color": colr_val}, showlegend = legend_decide
+                        )                      
+                    )
+
+            # show the figure
+            fig.show(renderer= renderer)
+
+    return None
+
+
 
 ## PROBABILITY DISTRIBUTION PLOTS (Probability vs Flow):
 #
