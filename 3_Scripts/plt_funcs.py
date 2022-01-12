@@ -136,26 +136,33 @@ def time_series_individual(df, site, day, win_len, type):
 
 # observations time series:
 
+
 ## CALIBRATION PLOTS (Skill vs Window Length)
-# deterministic forecasts only:
-# add option for CRPS:
-def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
+def calibrtn_plttr (hi_verif, lo_verif, prob_verif, site, day, 
+        flo_con = "high", fcst_types = ["Q_dmb", "Q_ldmb"]):
+
     if flo_con == "high" : 
         df_big = hi_verif
     elif flo_con == "low" :
         df_big = lo_verif
     else : print ("wrong input")
 
-    df_big = df_big.xs('median', level = 2)
+    # number of columns for the subplot
+    cols    = max ( len(fcst_types) // 2 , 1 )
+    rows    = len(fcst_types) if cols == 1 \
+        else max ( len(fcst_types) - cols, 1 )
 
     # make subplot interface
-    fig = make_subplots(rows = 2, cols = 1,
+    fig = make_subplots(cols         = cols,
+                        rows         = rows, 
                         shared_xaxes = True,
                         shared_yaxes = True,
-                        vertical_spacing = 0.09,
-                        subplot_titles=("DMB", "LDMB"),
+                        vertical_spacing    = 0.09,
+                        subplot_titles      = fcst_types,
                         x_title = "window length (days)",
                         y_title = "Score",
+                        specs   = [ [{"secondary_y": True} for 
+                            c in range(cols)] for r in range(rows)]
                         )
     # Add figure and legend title                  
     fig.update_layout(
@@ -170,19 +177,24 @@ def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
         range = [0.5, 1.1]
         )
 
+    # only extract the ensemble median
+    df_big = df_big.xs('median', level = 2)
+
+    row  = 1;  col = 1
     # loop through the forecast types:
-    fcst_types = ["Q_dmb", "Q_ldmb"]
     for type in fcst_types:
+        
+        # slice through the dataframe for individual forecast types:
         df = df_big.xs(type, level = 1)
         
         # show only one legend entry per verification metric:
         legend_decide = True if type == "Q_dmb" else False
         
         # define color to be used:
-        color   = pc.qualitative.D3
-        # metrics to plot:
+        colors   = iter(pc.qualitative.D3)
+
+        # deterministic metrics:
         metrics = ["NSE", "r", "flo_var", "bias", "KGE"]
-        
         for metric in metrics:     
             # plot different metrics:
             fig.append_trace( 
@@ -190,14 +202,41 @@ def calibrtn_plttr (hi_verif, lo_verif, site, day, flo_con = "high"):
                         y = df[metric], 
                         name = metric,
                         legendgroup = metric,
-                        marker_color = color[metrics.index(metric)],
+                        marker_color = next(colors),
                         showlegend = legend_decide
                         ),
-                row = fcst_types.index(type) + 1, col = 1
+                row = row, col = col
             )
+
+        # probabilistic metric:
+        df = prob_verif.xs(key = flo_con, level = 1). \
+            xs(key = type, level = 1)
+        
+        # plot CRPS
+        fig.add_trace( 
+            go.Scatter(x            = df.index, 
+                    y               = df['crps'], 
+                    name            = 'crps',
+                    legendgroup     = 'crps',
+                    marker_color    = next(colors),
+                    showlegend      = legend_decide
+                    ),
+            row = row, col = col,
+            secondary_y = True
+        )
+
+        print(row, col)
+        print(type)
+        # iterate row and cols:
+        col = col + 1
+        if col == cols + 1:
+            col = 1; row = row + 1
 
     return fig
 
+## POSTPROCESSING SKILL PLOTS (Skill vs Postprocess technique)
+
+## SKILL Lifetime (Skill vs Forecast Horizon)
 
 
 ## FORECAST VS OBSERVATION PLOTS (Flow vs Flow):
@@ -291,13 +330,11 @@ def scatter_plttr (df_det, bc_df, clim_vals, day, site,
     return None
 
 
-
 ## PROBABILITY DISTRIBUTION PLOTS (Probability vs Flow):
 #
 
 
-## Plot the variation of DMB:
-# 
+## DMB variation (DMB vs Time)
 def dmb_vars_plttr (bc_df, dmb_vars):
     fig = go.Figure(
         layout = {
@@ -309,7 +346,7 @@ def dmb_vars_plttr (bc_df, dmb_vars):
     )
 
     color       = pc.qualitative.D3
-    dmb_vars    = ["DMB", "LDMB", "DMB-var", "LDMB-var"]
+    dmb_vars    = ["dmb", "ldmb", "dmb-var", "ldmb-var"]
     for name in dmb_vars:
         # plot all DMB tracers
         # fig.add_trace(
@@ -326,7 +363,7 @@ def dmb_vars_plttr (bc_df, dmb_vars):
         fig.add_trace(
             go.Scatter(x = group_df.reset_index()["date"], 
                         y = group_df["max"],
-                        name = name, opacity = 0.6, 
+                        name = name, opacity = 0.5, 
                         marker_color = color[dmb_vars.index(name)] , 
                         legendgroup = name, showlegend = False
             )
@@ -336,10 +373,10 @@ def dmb_vars_plttr (bc_df, dmb_vars):
         fig.add_trace(
             go.Scatter(x = group_df.reset_index()["date"], 
                         y = group_df["min"],
-                        name = name, opacity = 0.6, 
+                        name = name, opacity = 0.5, 
                         marker_color = color[dmb_vars.index(name)], 
                         legendgroup = name, fill = "tonexty"
                 )
         )    
         
-        return fig
+    return fig
