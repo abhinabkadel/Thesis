@@ -97,8 +97,10 @@ def add_obs(place, obs_dir, day, fcst_df):
     return df, clim_vals
 
 # calculate Degree of Mass Balance (DMB):
-def dmb_calc(df, window, weight = False):
-    if weight == True:
+def dmb_calc(df, window, variation = "dmb"):
+    
+    # implementation based on Dominique:
+    if variation == "ldmb":
         # define the weights applied:
         wts = ( window + 1 - np.arange(1,window+1) ) / sum(np.arange(window+1))
 
@@ -112,48 +114,51 @@ def dmb_calc(df, window, weight = False):
         # calculate the DMB parameter:
         wt_DMB = np.vstack(Q_wins) * wts * np.reciprocal(np.vstack(Obs_wins))
         # add padding and sum the array
-        df["LDMB"] = np.pad(np.sum(wt_DMB, axis = 1), 
+        df[variation] = np.pad(np.sum(wt_DMB, axis = 1), 
                     pad_width = (window-1,0), 
                         mode = "constant", 
                             constant_values = np.nan)
-        return df
 
+    # Unweighted Degree of Mass Balance:
     else:
-        return df.Q_raw.rolling(window).sum().values / df.Obs.rolling(window).sum().values
+        df[variation] =  df.Q_raw.rolling(window).sum().values / \
+            df.Obs.rolling(window).sum().values
+    
+    return df
 
 # Bias correct forecasts (each ensemble member is independent) :
-def bc_fcsts(df, win_len):     
-    # Calculate DMB ratio:
-    # un-weighted:
-    df["DMB"] = dmb_calc(df.groupby(by = "ens_mem", dropna = False), window = win_len)
-    # weighted DMB:
-    df = df.groupby(by = "ens_mem").apply(lambda x:dmb_calc(x, window = win_len, weight =  True))
+def bc_fcsts(df, win_len ):     
 
-    # APPLY BIAS CORRECTION FACTOR:
-    # new column for un-weighted DMB bias correction: 
-    df = df.groupby(by = "ens_mem", dropna = False).     \
-        apply(lambda df:df.assign(
-            Q_dmb = df["Q_raw"].values / df["DMB"].shift(periods=1).values )
-            ).sort_index()
-    # new column for weighted DMB bias correction:
-    df = df.groupby(by = "ens_mem", dropna = False).     \
-        apply(lambda df:df.assign(
-            Q_ldmb = df["Q_raw"].values / df["LDMB"].shift(periods=1).values )
-            ).sort_index()
+    dmb_vars = ["dmb", "ldmb"]
+
+    for variation in dmb_vars:
+        
+        # Calculate dmb ratio:
+        df = df.groupby(by = "ens_mem").apply(
+            lambda x:dmb_calc(x, window = win_len, variation = variation)
+        )    
+
+        # APPLY BIAS CORRECTION FACTOR:
+        df = df.groupby(by = "ens_mem", dropna = False).     \
+            apply(lambda df:df.assign(
+                new_val = df["Q_raw"].values / df[variation].shift(periods=1).values )
+            ).rename(
+                columns = {'new_val':"Q_"+variation}
+            ).sort_index()   
 
     return df
 
 # function to create determininstic forecasts (mean, median and high-res):
-def det_frcsts (df):    
+def det_frcsts (df, fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):    
     # ensemble median:
     df_med  = df.groupby(by = "date").median().reset_index() \
-    [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
+        [["date","Obs"] + fcst_types]
     # ensemble mean:
     df_mean = df.groupby(by = "date").mean().reset_index() \
-        [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
+        [["date","Obs"] + fcst_types]
     # high-res forecast
     df_highres = df[df["ens_mem"] == 52] \
-    [["date","Obs","Q_raw","Q_dmb", "Q_ldmb"]]
+        [["date","Obs"] + fcst_types]
 
     # concatenate the 3 deterministic forecast matrices to create 
     # a single deterministic dataframe:
@@ -190,7 +195,9 @@ def kge_form(df, fcst_type = "Q_dmb"):
     return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
 
 # calculate deterministic verification metrics:
-def metric_calc(df_det, clim_vals):
+def metric_calc(df_det, clim_vals, 
+    fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
+    
     # defines dataframes for low_flow and high_flow values
     df_low  = df_det[df_det["Obs"] <= clim_vals["q70_flo"]]
     df_high = df_det[df_det["Obs"] > clim_vals["q70_flo"]]
@@ -203,9 +210,9 @@ def metric_calc(df_det, clim_vals):
         # loop through win len
         # fcst_Day
         data = []
-        fcst_type = ["Q_raw", "Q_dmb", "Q_ldmb"]
+        
         # loop through the raw and bias corrected forecasts:
-        for i in fcst_type:
+        for i in fcst_types:
             # NSE:
             NSE = df.groupby(by = "det_frcst").apply(
                     lambda x:nse_form(x, flo_mean, i)
@@ -224,22 +231,19 @@ def metric_calc(df_det, clim_vals):
 
             data.append(verifs)
 
-        # end for along fcst_type
+        # end for along fcst_types
 
         if flo_mean == clim_vals["lo_flo_clim"]:
             lo_verif = pd.concat(data)
-            # lo_verif = lo_verif.set_index(["fcst_type"], append= True
-            #     ).reorder_levels(["fcst_type", "det_frcst"])
 
         else : 
             hi_verif = pd.concat(data)
-            # hi_verif = hi_verif.set_index(["fcst_type"], append= True
-            #     ).reorder_levels(["fcst_type", "det_frcst"])
-
+        
     return lo_verif, hi_verif
 
 # calculate probabilistic verification metrics:
-def prob_metrics(bc_df, q70_flo):
+def prob_metrics(bc_df, clim_vals,
+    fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
     
     prob_verif = []
     # loop through the two dataframes to create:
@@ -247,14 +251,13 @@ def prob_metrics(bc_df, q70_flo):
 
         # define the subset of dataset to workn with:
         if flo_con == "low":
-            df  = bc_df[bc_df["Obs"] <= q70_flo]
+            df  = bc_df[bc_df["Obs"] <= clim_vals["q70_flo"]]
         else :
-            df  = bc_df[bc_df["Obs"] > q70_flo]
+            df  = bc_df[bc_df["Obs"] > clim_vals["q70_flo"]]
 
-        fcst_type = ["Q_raw", "Q_dmb", "Q_ldmb"]
         crps_vals = []
         # loop through the raw and bias corrected forecasts:
-        for i in fcst_type:
+        for i in fcst_types:
 
             ## CRPS Hydrostats:
             # frcsts  = df[["Q_dmb"]].reset_index().pivot(
@@ -262,7 +265,7 @@ def prob_metrics(bc_df, q70_flo):
             # obs     = df.xs(key = 52)["Obs"].values
 
             # crps = ens_crps(obs, frcsts)
-            print(i)
+
             # CRPS xskillscore 
             ds           = df.xs(key = 52)[["Obs"]].to_xarray()
             ds['frcsts'] = df.reorder_levels(["date", "ens_mem"]) \
@@ -272,11 +275,11 @@ def prob_metrics(bc_df, q70_flo):
 
             crps_vals.append(crps)
             
-            # end for along fcst_type
+            # end for along fcst_types
 
         # create a dataframe out of 
         data = pd.DataFrame(
-            {"fcst_type":fcst_type, 
+            {"fcst_type":fcst_types, 
             "crps":np.array(crps_vals)}
         )
         # add a column about the flow climatology information:
@@ -292,44 +295,52 @@ def prob_metrics(bc_df, q70_flo):
 
 # Integrate overall bias correction process in the function :
 # input df already contains observations as well
-def post_process(fcst_data, win_len, clim_vals):
+def post_process(fcst_data, win_len, clim_vals,
+        fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
 
     # Bias correct the forecasts using DMB and LDMB
     bc_df = bc_fcsts(df = fcst_data, win_len = win_len )
 
     # Separate dataframes for deterministic forecasts:
     # df = t1.reset_index()
-    df_det = det_frcsts(bc_df.reset_index())
+    df_det = det_frcsts(bc_df.reset_index(), fcst_types)
 
     # calculate the metrics:
-    lo_verif, hi_verif = metric_calc(df_det, clim_vals)
+    lo_verif, hi_verif = metric_calc(df_det, clim_vals, fcst_types)
 
     # calculate probabilitic verification (CRPS):
-    prob_verif = prob_metrics(bc_df, clim_vals["q70_flo"])
+    prob_verif = prob_metrics(bc_df, clim_vals, fcst_types)
 
     return lo_verif, hi_verif, bc_df, prob_verif
 
 # forecast calibration:
-def fcst_calibrator (fcst_data, clim_vals):
+def fcst_calibrator (fcst_data, clim_vals, 
+        fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
 
-    windows = [2, 3, 5, 7, 10, 15, 20, 30]
-    lo_verif = []
-    hi_verif = []
-
+    windows     = [2, 3, 5, 7, 10, 15, 20, 30]
+    lo_verif    = []
+    hi_verif    = []
+    prob_verif  = []
     for win_len in windows:
-        lo_df, hi_df, bc_df =  post_process(fcst_data, win_len, 
-                            clim_vals)
-        lo_df["win_length"] = win_len
-        hi_df["win_length"] = win_len 
+        lo_df, hi_df, bc_df, prob_df =  post_process(fcst_data, win_len, 
+                            clim_vals, fcst_types)
+        lo_df["win_length"]     = win_len
+        hi_df["win_length"]     = win_len
+        prob_df["win_length"]   = win_len
         lo_verif.append(lo_df) 
         hi_verif.append(hi_df)
+        prob_verif.append(prob_df)
 
     # create a single large dataframe for low and high flow seasons:
-    lo_verif = pd.concat(lo_verif)
-    hi_verif = pd.concat(hi_verif)
+    lo_verif    = pd.concat(lo_verif)
+    hi_verif    = pd.concat(hi_verif)
+    prob_verif  = pd.concat(prob_verif)
+
     lo_verif = lo_verif.set_index(["win_length", "fcst_type"], append= True
                     ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
     hi_verif = hi_verif.set_index(["win_length", "fcst_type"], append= True
                     ).reorder_levels(["win_length", "fcst_type", "det_frcst"]).sort_index()
-
-    return lo_verif, hi_verif
+    prob_verif = prob_verif.set_index(["win_length"], append= True
+                    ).reorder_levels(["win_length", "flow_clim", "fcst_type"]).sort_index()
+    
+    return lo_verif, hi_verif, prob_verif
