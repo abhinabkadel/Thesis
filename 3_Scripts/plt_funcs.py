@@ -369,7 +369,42 @@ def det_skill_horizon_plttr (det_verif, site):
     return fig
 
 # plot for probabilistic metric (CRPS):
+def crps_horizon_plttr(prob_verif, site):
+    
+    fig = go.Figure(
+        layout = {
+            "xaxis_title"   : "forecast horizon (day)",
+            "yaxis_title"   : "CRPS",    
+            "title"         : "<b> CRPS across different forecast horizons </b> <br> " + 
+                            "site = " + site,
+            "title_x"       : 0.5        
+        }
+    )
 
+    fcst_types = ["Q_raw", "Q_dmb"]
+    for fcst_type in fcst_types:
+        dash = 'dashdot' if fcst_type == 'Q_raw' else 'solid'
+
+        colors  = iter(['green', 'red'])   
+        # loop through the flow conditions:
+        for flow_con in ['low', 'high'] :
+
+            # plot CRPS aka the probabilistic metric
+            fig.add_trace( 
+                go.Scatter(
+                    x = prob_verif.index.get_level_values("day")
+                                    .unique().values, 
+                    y = prob_verif.xs(fcst_type, level = "fcst_type")
+                                .xs(flow_con, level = "flow_clim")['crps'], 
+                    line = dict(
+                        color = next(colors), width=4,
+                        dash = dash, shape = 'spline'
+                        ),
+                    name            = fcst_type + ' '+ flow_con,
+                    )
+            )
+
+    return fig
 
 
 ## FORECAST VS OBSERVATION PLOTS (Flow vs Flow):
