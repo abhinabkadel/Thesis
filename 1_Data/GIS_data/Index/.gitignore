@@ -1,7 +1,2 @@
-Available_data.xlsx
-Jorge_folders.txt
-.Rproj.user
-Scripts/operation_log.txt
-Scripts/iframe_figures
-Literature/"Past thesis"
-.DS_Store
+*
+!.gitignore
