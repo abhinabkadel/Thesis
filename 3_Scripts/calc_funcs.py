@@ -57,7 +57,7 @@ def df_creator(rt_dir, date_range, riv_id, ens_members):
             # append the fcst_data with mini_df
             fcst_data.append(df)
         # end for ensemble list
-    # end for montlhly file list
+    # end for forecast run dates
 
     # concatanate individual mini-dfs to create a dataframe for the time period
     fcst_data = pd.concat(fcst_data)
@@ -344,3 +344,224 @@ def fcst_calibrator (fcst_data, clim_vals,
                     ).reorder_levels(["win_length", "flow_clim", "fcst_type"]).sort_index()
     
     return lo_verif, hi_verif, prob_verif
+
+## DMB VARIATIONS FUNCTIONS:
+def dmb_calc_variations(df, window, variation = "dmb"):
+    
+    # implementation based on Dominique:
+    if variation == "ldmb":
+        # define the weights applied:
+        wts = ( window + 1 - np.arange(1,window+1) ) / sum(np.arange(window+1))
+
+        # define lists that will house the rolling values of raw forecasts and observations:
+        Q_wins = []
+        Obs_wins = []
+        # add rolling values of observations and raw forecasts to the list 
+        df['Q_raw'].rolling(window).apply(lambda x:Q_wins.append(x.values) or 0)
+        df['Obs'].rolling(window).apply(lambda x:Obs_wins.append(x.values) or 0)
+        # convert both lists to (N_days - win_len + 1) x win_len 2d numpy arrays and then 
+        # calculate the dmb parameter:
+        wt_DMB = np.vstack(Q_wins) * wts * np.reciprocal(np.vstack(Obs_wins))
+        # add padding and sum the array
+        df[variation] = np.pad(np.sum(wt_DMB, axis = 1), 
+                    pad_width = (window-1,0), 
+                        mode = "constant", 
+                            constant_values = np.nan)
+        return df
+
+    # Vaariation of the original implementation, to make it align with original
+    # un-weighted dmb implementation
+    # take ratio of the sum of the weighted forecasts and observations
+    if variation == "ldmb-var":
+
+        # define the weights applied:
+        wts = ( window + 1 - np.arange(1,window+1) ) / sum(np.arange(window+1))
+
+        # define lists that will house the rolling values of raw forecasts and observations:
+        Q_wins = []
+        Obs_wins = []
+        # add rolling values of observations and raw forecasts to the list 
+        df['Q_raw'].rolling(window).apply(lambda x:Q_wins.append(x.values) or 0)
+        df['Obs'].rolling(window).apply(lambda x:Obs_wins.append(x.values) or 0)
+        # convert both lists to (N_days - win_len + 1) x win_len 2d numpy arrays and then 
+        # calculate the DMB parameter:
+        wt_DMB = np.sum( np.vstack(Q_wins) * wts, axis = 1) / \
+                np.sum(np.vstack(Obs_wins) * wts, axis = 1)
+        # add padding and sum the array
+        df[variation] = np.pad(wt_DMB, 
+                    pad_width = (window-1,0), 
+                        mode = "constant", 
+                            constant_values = np.nan)
+        return df
+        
+    # take the sum of the ratios 
+    if variation == "dmb-var":
+
+        # define lists that will house the rolling values of raw forecasts and observations:
+        Q_wins = []
+        Obs_wins = []
+        # add rolling values of observations and raw forecasts to the list 
+        df['Q_raw'].rolling(window).apply(lambda x:Q_wins.append(x.values) or 0)
+        df['Obs'].rolling(window).apply(lambda x:Obs_wins.append(x.values) or 0)
+        # convert both lists to (N_days - win_len + 1) x win_len 2d numpy arrays and then 
+        # calculate the DMB parameter:
+        wt_DMB = np.sum ( np.vstack(Q_wins)/ \
+                np.vstack(Obs_wins) , axis = 1)
+        # add padding and sum the array
+        df[variation] = np.pad(wt_DMB, 
+                    pad_width = (window-1,0), 
+                        mode = "constant", 
+                            constant_values = np.nan)
+
+        return df
+
+    # dmb original implementation based on McCollor & Stull, Bourdin 2013:
+    # ratio of the sums:
+    else:
+        df[variation] =  df.Q_raw.rolling(window).sum().values / \
+            df.Obs.rolling(window).sum().values
+        return df
+
+def bc_fcsts_variations(df, win_len):     
+    
+    dmb_vars = ["dmb", "ldmb", "dmb-var", "ldmb-var"]
+    
+    for variation in dmb_vars:
+        
+        # Calculate dmb ratio:
+        df = df.groupby(by = "ens_mem").apply(
+            lambda x:dmb_calc_variations(x, window = win_len, variation = variation)
+        )    
+
+        # APPLY BIAS CORRECTION FACTOR:
+        df = df.groupby(by = "ens_mem", dropna = False).     \
+            apply(lambda df:df.assign(
+                new_val = df["Q_raw"].values / df[variation].shift(periods=1).values )
+            ).rename(
+                columns = {'new_val':"Q_"+variation}
+            ).sort_index()
+    
+    return df
+
+def dmb_vars_test(fcst_types, days, win_len, site, fcst_data, obs_dir): 
+    lo_verif    = []
+    hi_verif    = []
+    prob_verif  = []
+    # loop through the forecast horizons
+    for day in days:
+
+        # add observations:
+        [fcst_data_day, clim_vals] = add_obs(
+        place = site, fcst_df = fcst_data, obs_dir = obs_dir, day = day)
+
+        bc_df   = bc_fcsts_variations(fcst_data_day, win_len)   
+        df_det  = det_frcsts(bc_df.reset_index(),
+                fcst_types)
+
+        # deterministic metric:
+        lo_df, hi_df = metric_calc(df_det, clim_vals, fcst_types)
+
+        # calculate probabilitic verification (CRPS):
+        prob_df = prob_metrics(bc_df, clim_vals, fcst_types)
+
+        lo_df["day"]   = day
+        hi_df["day"]   = day
+        prob_df["day"] = day
+
+        # one large df with day information
+        lo_verif.append(lo_df) 
+        hi_verif.append(hi_df)
+        prob_verif.append(prob_df)
+
+    # create a single large dataframe for low and high flow seasons:
+    lo_verif    = pd.concat(lo_verif)
+    hi_verif    = pd.concat(hi_verif)
+    prob_verif  = pd.concat(prob_verif)
+
+    lo_verif["flow_clim"]   = "low"
+    hi_verif["flow_clim"]   = "high"
+
+    det_verif   = pd.concat([lo_verif, hi_verif])
+
+    det_verif    = det_verif.set_index(["day", "flow_clim", "fcst_type"], append= True
+                    ).reorder_levels(["day", "flow_clim", "fcst_type", "det_frcst"]).sort_index()
+    prob_verif  = prob_verif.set_index(["day"], append= True
+                    ).reorder_levels(["day", "flow_clim", "fcst_type"]).sort_index()
+
+    return det_verif, prob_verif
+
+# RUNOFF DATASET CREATION
+def runoff_data_creator(site, date_range):
+
+    wt_df = pd.read_pickle("./pickle_dfs/" + site + "_wt.pkl")
+
+    rt_dir      = r"../1_Data/runoff_forecasts/"
+    
+    init_date_list = pd.date_range(start = date_range[0], 
+                        end = date_range[1]).strftime("%Y%m%d").values
+    runoff_data = []
+    for init_date in init_date_list:
+        # loop through the ensemble members:
+        for ens_mem in np.arange(1,53): 
+            # forecast filter points to for high/low res forecasts:
+            filtr_pts = wt_df.xs('high') if ens_mem == 52 \
+                else wt_df.xs('low')
+
+            # load the forecast files:
+            fname       = f'runoff_{ens_mem:d}.nc'    
+            file_pth    = os.path.join(rt_dir, init_date, fname)    
+            data        = xr.open_dataset(file_pth)
+
+            runoff_vals = []
+
+            # resample the forecasts to daily 
+            test = data.RO.resample(time = '1D').mean()
+            
+            # loop through the forecast grids that intersect with the 
+            # catchment:
+            for i in range(len(filtr_pts)):
+
+                # substitution to make code readable:
+                easy_var    = test.sel(lon = filtr_pts.lon[i],
+                            lat = filtr_pts.lat[i],
+                            method= 'nearest')
+
+                easy_var[:] = easy_var * filtr_pts.weight[i]/100 \
+                    * filtr_pts.grid_area[i]
+
+                runoff_vals.append(easy_var)
+
+            # sum the runoff values to produce total runoff time series 
+            # for the catchment:
+            catch_RO = np.sum(runoff_vals, axis = 0)
+            df = pd.DataFrame(
+                {
+                    'runoff': catch_RO
+                },
+                index = test.time.values
+            )
+            df.index.name = 'date'
+
+            # set the ensemble value based on the range index
+            df['ens_mem'] = ens_mem
+
+            # add in information on initial date:
+            df["init_date"] = init_date
+
+            # # specify the day of the forecast
+            df["day_no"] = 1 + (df.index.get_level_values('date') -  
+                            pd.to_datetime(init_date, 
+                                format = '%Y%m%d')).days 
+
+            runoff_data.append(df)
+
+        # end for ensemble list
+    # end for forecast run dates
+
+    runoff_data = pd.concat(runoff_data)
+    runoff_data.set_index(['ens_mem', 'day_no'] , append = True, inplace = True )
+    runoff_data = runoff_data.reorder_levels(["ens_mem", "day_no", "date"]).sort_index()
+
+    runoff_data.to_pickle("./pickle_dfs/" + site + "_runoff.pkl")
+
+    return runoff_data
