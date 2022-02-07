@@ -6,9 +6,9 @@ import plotly.colors as pc
 
 ## TIME SERIES PLOTS (Flow vs Time):
 # time series for all 3 bias correction options:
-def time_series_plotter(df, site, day, win_len):
+def time_series_plotter(df, site, day):
     # make subplot interface
-    fig = make_subplots(rows = 3, cols = 1,
+    fig = make_subplots(rows = 2, cols = 1,
                         shared_xaxes = True,
                         shared_yaxes = True,
                         vertical_spacing = 0.09,
@@ -20,13 +20,13 @@ def time_series_plotter(df, site, day, win_len):
     # Add figure and legend title                  
     fig.update_layout(
         title_text = "Bias-correction for streamflow forecasts"+
-            f"<br> site = {site}, horizon = {day}, window = {win_len}",
+            f"<br> site = {site}, horizon = {day}",
         title_x = 0.5,
         legend_title = "Legend", 
         yaxis_rangemode = "tozero"
         )
     # loop through the forecast types:
-    fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]
+    fcst_types = ["Q_raw", "Q_dmb"]
     for type in fcst_types:
         legend_decide = True if type == "Q_raw" else False
 
@@ -76,7 +76,11 @@ def time_series_plotter(df, site, day, win_len):
     return fig
 
 # time series for individual bias correction option:
-def time_series_individual(df, site, day, win_len, type):
+def time_series_individual(df, site, day, type):
+
+    yaxis_txt = "catchment runoff (<i>m<sup>3</sup></i>)" if type == 'runoff' \
+        else "River discharge (<i>m<sup>3</sup>/s</i>)"
+
     fig = go.Figure(
         layout = {
             "xaxis_title" : "date",
@@ -87,7 +91,7 @@ def time_series_individual(df, site, day, win_len, type):
     # Add figure and legend title                  
     fig.update_layout(
         title_text = "Bias-correction for streamflow forecasts"+
-            f"<br> site = {site}, forecast horizon = {day}, window = {win_len}",
+            f"<br> site = {site}, forecast horizon = {day}",
         title_x = 0.5,
         legend_title = "Legend", 
         yaxis_rangemode = "tozero"
@@ -124,13 +128,14 @@ def time_series_individual(df, site, day, win_len, type):
                 legendgroup = "ens-mean")
     )
 
-    # plot OBS:
-    fig.add_trace(
-            go.Scatter(x = df[df["ens_mem"] == 52]["date"],
-                y=df[df["ens_mem"] == 52]["Obs"], name = "observed",
-                line = {"color":"red"}, mode = "lines+markers", 
-                legendgroup = "obs")
-    )
+    if type != 'runoff':
+        # plot OBS:
+        fig.add_trace(
+                go.Scatter(x = df[df["ens_mem"] == 52]["date"],
+                    y=df[df["ens_mem"] == 52]["Obs"], name = "observed",
+                    line = {"color":"red"}, mode = "lines+markers", 
+                    legendgroup = "obs")
+        )
 
     return fig 
 
@@ -406,6 +411,131 @@ def crps_horizon_plttr(prob_verif, site):
 
     return fig
 
+def kge_crps_plttr(det_verif, prob_verif, site, fcst_types):
+    
+    # make subplot for KGE
+    fig = make_subplots(cols         = 2,
+                        rows         = 1, 
+                        shared_xaxes = True,
+                        shared_yaxes = True,
+                        vertical_spacing    = 0.05,
+                        horizontal_spacing    = 0.05,
+                        subplot_titles      = [
+                            "low flow",
+                            "high flow"
+                            ],
+                        x_title = "forecast horizon (day)",
+                        y_title = "KGE"
+                        )
+                        
+    # update layout for KGE                    
+    fig.update_layout(
+        title_text = "<b> KGE for different bias correction " +
+            "approaches across the 10 day forecast horizon" + 
+                f"<br> site = </b> {site}",
+        title_x    =  0.5,
+        legend     = {
+            'x': 0.95,
+            'y': 1,
+            'itemwidth':40, 
+            # 'sizey':0.5
+        },
+        margin     = {
+            'b' : 50,
+            't' : 70
+        } 
+        )
+
+    # make subplot for CRPS:
+    fig_crps = make_subplots(cols         = 2,
+                        rows         = 1, 
+                        shared_xaxes = True,
+                        shared_yaxes = False,
+                        vertical_spacing    = 0.05,
+                        horizontal_spacing    = 0.05,
+                        subplot_titles      = [
+                            "low flow",
+                            "high flow"
+                            ],
+                        x_title = "forecast horizon (day)",
+                        y_title = "CRPS (<i>m<sup>3</sup>/s</i>)"
+                        )
+
+    # update layout for CRPS
+    fig_crps.update_layout(
+        title_text = "<b> CRPS for different bias correction " +
+                    "approaches across the 10 day forecast horizon " + 
+                    "<br> site = </b>" + site,
+        title_x    =  0.5,
+        legend     = {
+            'x': 0.95,
+            'y': 1,
+            'itemwidth':40, 
+            # 'sizey':0.5
+        },
+        margin     = {
+            'b' : 50,
+            't' : 70
+        } 
+        )
+
+    # choose the deterministic forecast
+    det_frcst = 'median'
+    col_val = 1
+    # loop through the flow conditions:
+    for flow_con in ['low', 'high'] :
+
+        # legend decide:
+        legend_decide = True if flow_con == 'low' else False
+        
+        # define color option to be used:
+        colors  = iter(pc.qualitative.D3)            
+
+        # loop through the forecast types:
+        for fcst_type in fcst_types:
+            
+            # plot KGE:
+            fig.add_trace(
+                go.Scatter(
+                    x = det_verif.index.get_level_values("day")
+                            .unique().values,
+                    y = det_verif.xs(fcst_type, level = "fcst_type")
+                            .xs(flow_con, level = "flow_clim")
+                            .xs(det_frcst, level = "det_frcst")['KGE'],
+                    line = dict(
+                        color = next(colors), width=4,
+                        shape = 'spline'
+                        ), 
+                    name =  fcst_type, 
+                    legendgroup = fcst_type, 
+                    showlegend = legend_decide
+                ), 
+                row = 1, col = col_val
+            )
+
+            # plot CRPS aka the probabilistic metric
+            fig_crps.add_trace( 
+                go.Scatter(
+                    x = prob_verif.index.get_level_values("day")
+                                    .unique().values, 
+                    y = prob_verif.xs(fcst_type, level = "fcst_type")
+                                .xs(flow_con, level = "flow_clim")['crps'], 
+                    line = dict(
+                        color = next(colors), width=4,
+                        shape = 'spline'
+                        ),
+                    name = fcst_type,
+                    legendgroup = fcst_type, 
+                    showlegend = legend_decide
+                    ),
+                row = 1, col = col_val
+            )
+
+        col_val = 2
+
+    return fig, fig_crps
+
+
 
 ## FORECAST VS OBSERVATION PLOTS (Flow vs Flow):
 def scatter_plttr (df_det, bc_df, clim_vals, day, site,
@@ -514,7 +644,7 @@ def dmb_vars_plttr (bc_df, dmb_vars):
     )
 
     color       = pc.qualitative.D3
-    dmb_vars    = ["dmb", "ldmb", "dmb-var", "ldmb-var"]
+
     for name in dmb_vars:
         # plot all DMB tracers
         # fig.add_trace(
@@ -548,3 +678,5 @@ def dmb_vars_plttr (bc_df, dmb_vars):
         )    
         
     return fig
+
+## 
