@@ -3,6 +3,7 @@ import pandas as pd
 import warnings
 
 from sympy import det
+from zmq import PROTOCOL_ERROR_ZMTP_UNEXPECTED_COMMAND
 # import all functions:
 from calc_funcs import *
 from plt_funcs import *
@@ -50,7 +51,7 @@ obs_dir, fcst_data = get_fcst_data ( date_range, site)
 ####### Compile overall bias corrected dataset ######
 """
 days            = range(1,11)
-# days            = [1,2]
+# days            = [4]
 win_len         = 2
 complete_data   = []
 for day in days:
@@ -76,8 +77,10 @@ complete_data   = complete_data.set_index('init_date', append=True
         [['Q_raw', 'Q_dmb', 'Obs', 'day']]
 
 # %% bias correction getting perfect information:
-vat = bc_df.loc[slice(1,2), slice("20150101" , "20150106"),: ]
+vat = bc_df.loc[slice(1,2), slice("20150103" , "20150109"),: ]
 
+vat = bc_df.loc[slice(1,2), slice("20150103" , "20150110"),: ]
+vat
 
 
 # %%
@@ -198,11 +201,11 @@ max_energy  = rated_discharge * turbines * 9.81 * net_head * efficiency * 24/100
 #           hrs_operation * specfic gravity 
 test['fcst_energy'] = ( test['Q_dmb'] - test['eflow'] ) * 9.81 * \
     net_head * efficiency * (24 - outage) / 1000
-test.loc[test.fcst_energy > max_energy, 'energy_yield'] = max_energy
+test.loc[test.fcst_energy > max_energy, 'fcst_energy'] = max_energy
 
 test['perf_info'] = ( test['Obs'] - test['eflow'] ) * 9.81 * \
     net_head * efficiency * (24 - outage) / 1000
-test.loc[test.perf_info > max_energy, 'energy_yield'] = max_energy
+test.loc[test.perf_info > max_energy, 'perf_info'] = max_energy
 
 # plot the ensemble energy generation:
 fig = go.Figure(
@@ -226,7 +229,7 @@ for i in range(1,53):
     fig.add_trace(
         go.Scatter(
             x = test.xs(i, level = 'ens_mem').index, 
-            y = test.xs(i, level = 'ens_mem')["energy_yield"],
+            y = test.xs(i, level = 'ens_mem')["fcst_energy"],
             name = "forecast", legendgroup = "forecast",
             showlegend = True if i == 1 else False,
             marker_opacity = 0,
@@ -239,7 +242,7 @@ for i in range(1,53):
 # add ensemble median:
 fig.add_trace( 
     go.Scatter(x = test.groupby(by = "date").median().index,
-            y = test.groupby(by = "date").median()['energy_yield'],
+            y = test.groupby(by = "date").median()['fcst_energy'],
             name = "ensemble median", legendgroup = "ens-med",
             line = {"color" : "cyan", "shape" : "spline"}
     )
@@ -257,6 +260,9 @@ fig.add_trace(
 fig.show()
 
 #%% day ahead financial analysis
+"""
+####### Financial analysis for day ahead scenario ######
+"""
 train_dat  = complete_data[complete_data["Obs"] <= clim_vals["q70_flo"]]
 
 day_ahead  = train_dat.set_index("day", append=True).xs(1, level = "day")
@@ -275,6 +281,10 @@ day_ahead = day_ahead.join(pers_frcst, how="inner")
 day_ahead
 
 # %% deterministic comparison:
+"""
+####### Deterministic scenario only ######
+"""
+## deterministic flow information:
 det_data   = day_ahead.groupby("date").median()
 outage      = 0
 efficiency  = 0.9
@@ -289,15 +299,15 @@ det_data            = det_data.join(obs_mon, how = "inner", rsuffix= "_mean"
 det_data["eflow"]   = det_data["Obs_mean"] * 0.1
 det_data
 
-
 # %% Energy dataframe
 det_energy = det_data[["pers_frcst", 'Q_dmb', "Obs"]].sub(det_data["eflow"], axis = 0) \
                 * 9.81 * net_head * efficiency * (24 - outage) / 1000
 det_energy[det_energy > max_energy] = max_energy
 
 #%% Revenue dataframe
-ppa_rate = 8.30
-revenue = det_energy
+# ppa rate NRs per kWh | convert to MWh
+ppa_rate = 8.30 * 1000
+revenue = det_energy.copy(deep = True)
 
 revenue["pers_fine"] = np.where(det_energy["Obs"] < 0.8 * det_energy["pers_frcst"], True, False)
 revenue["fcst_fine"] = np.where(det_energy["Obs"] < 0.8 * det_energy["Q_dmb"], True, False)
@@ -305,3 +315,56 @@ revenue["fcst_fine"] = np.where(det_energy["Obs"] < 0.8 * det_energy["Q_dmb"], T
 revenue["pers_half"] = np.where(det_energy["Obs"] > det_energy["pers_frcst"], True, False)
 revenue["fcst_half"] = np.where(det_energy["Obs"] > det_energy["Q_dmb"], True, False)
 
+
+# %%
+def revenue_calc(df, fcst_type, ppa_rate):
+
+    print (df)  
+    generation = df["Obs"]
+    bid_amt    = df[fcst_type] 
+    # normal conditions
+    gen_revenue = generation * ppa_rate
+    
+    # add fine amount:
+    if generation < 0.8*bid_amt:
+        fine_amt = (generation - 0.8*bid_amt) * ppa_rate
+        gen_revenue = gen_revenue + fine_amt
+    
+    # excess generation 
+    elif generation > bid_amt :
+        gen_revenue = ( bid_amt + (generation - bid_amt)/2 ) * ppa_rate  
+    
+    return gen_revenue
+
+revenue["pers_revenue"] = revenue.apply( lambda df:revenue_calc(df, "pers_frcst", ppa_rate), axis = 1 )
+revenue["fcst_revenue"] = revenue.apply( lambda df:revenue_calc(df, "Q_dmb", ppa_rate), axis = 1 )
+revenue["act_revenue"]  = revenue["Obs"] * ppa_rate
+revenue
+
+#%% calculate overall revenue
+revenue[["pers_revenue", "fcst_revenue", "act_revenue"]].sum()
+
+# %%
+"""
+####### Ensemble scenario ######
+"""
+# first test the cases where the ensemble forecasts did not capture the 
+# observation at all:
+day_ahead
+
+# %%
+# extract the min, max, Q1 and Q3 for the day ahead forecasts
+test = day_ahead["Q_dmb"].groupby("date").agg( 
+            [ min, lambda x:x.quantile(0.25), lambda x:x.quantile(0.75), max ]
+        ).rename(columns = {"<lambda_0>":"Q1", "<lambda_1>":"Q3"})
+# add the observations and persistence forecast information:
+test = test.join(pd.concat([obs, pers_frcst], axis = 1, join = "inner")).dropna()
+
+test["within_limits"] = np.where( np.logical_and (test["min"] <= test["Obs"] , test["max"] > test["Obs"]), True, False)
+
+test["within_50"] = np.where( np.logical_and (test["Q1"] <= test["Obs"] , test["Q3"] > test["Obs"]), True, False)
+test
+
+# %%
+if df["Q_dmb"].min() < df["Obs"].mean() and df["Q_dmb"].max() > df["Obs"].mean() :
+    df["included"] = True
