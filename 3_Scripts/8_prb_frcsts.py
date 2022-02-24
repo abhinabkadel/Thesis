@@ -1,5 +1,6 @@
 # %%
 from datetime import date
+from sklearn.neighbors import KernelDensity
 import pandas as pd
 import warnings
 # import all functions:
@@ -44,11 +45,124 @@ site = "Marsyangdi";  date_range = ['20150101', '20151231']
 obs_dir, fcst_data = get_fcst_data ( date_range, site)
 # fcst_data is the original df used for all later calculations:
 
-# %% Approach to create probabilistic forecast:
-# implement the Kernel density estimation
-from sklearn.neighbors import KernelDensity
-site = "Marsyangdi";  date_range = ['20140101', '20141231']
+
+"""
+####### Dominique's approach ######
+"""
+# %% 
+site = "Marsyangdi";  date_range = ['20150101', '20151231']
 obs_dir, calib_datset = get_fcst_data ( date_range, site)
+
+days = [*range(1,11)]
+win_len = 2
+day = 2
+# days = [5, 7, 9, 10]
+# for day in days:
+    
+# add observations:
+[calib_dat, clim_vals] = add_obs(
+    place = site, fcst_df = calib_datset, obs_dir = obs_dir, day = day)
+
+# bias correct and return 2 deterministic forecast outputs and 
+# also the overall bias corrected dataframe:
+lo_df, hi_df, calib_dat, prob_verif =  post_process(calib_dat, win_len, 
+                        clim_vals)
+
+# focus on low flow season only:
+df_low  = calib_dat[calib_dat["Obs"] <= clim_vals["q70_flo"]]
+df_low = df_low[["Q_dmb", "Obs"]]
+
+
+# %% Step 1: plot a Talagand diagram
+
+# test = df_low.loc(axis=0)[
+#         (slice(1,4), slice("20140410", "20140419"))
+#     ].reorder_levels(["date", "ens_mem"]).sort_index()
+test = df_low
+# compute individual ranks:     
+test = test.groupby(by = "date").apply(
+    lambda x: x.assign(
+        rank = sum( x["Q_dmb"] < x["Obs"].unique()[0] ) + 1
+    )
+)  
+
+# plot a histogram:
+import plotly.express as px
+fig = px.histogram(test, x = "rank", histnorm="percent",
+    labels = {'percent' : 'count'},
+    title = "Rank histogram")
+fig.update_layout( yaxis_title_text='frequency', title_x = 0.5 )
+fig.show()
+
+
+# %% Step 2: plot distribution of the errors:
+
+# Calculate the ensemble median:
+ens_med = test.groupby(by = "date").median()
+# Error of the ensemble median:
+error       = ens_med["Obs"] - ens_med["Q_dmb"]
+error_ln    = np.log(ens_med["Obs"]) - np.log(ens_med["Q_dmb"])
+
+import plotly.figure_factory as ff
+# Plot the empirical distributions of ensemble median errors and 
+# the theoretical gaussian distribution:
+fig = ff.create_distplot( [error.dropna().values], ['Gaussian'], 
+    bin_size=.5, curve_type='normal', show_hist = False, show_rug= False)
+fig.add_trace(
+        go.Histogram( x = error, histnorm='probability density')
+    )
+fig.update_xaxes(
+    range = [-80, 80]
+)
+fig.show()
+
+# Plot the empirical distributions of log ensemble median errors and 
+# the theoretical gaussian distribution:
+fig = ff.create_distplot( [error_ln.dropna().values], ['Gaussian'], 
+    bin_size=.5, curve_type='normal', show_hist = False, show_rug= False)
+fig.add_trace(
+        go.Histogram( x = error_ln, histnorm='probability density')
+    )
+# fig.update_xaxes(
+#     range = [-80, 80]
+# )
+fig.show()
+
+
+# %% Errors are Gaussian shape roughly. get the gaussian function:
+sample_date = test.xs(key = "20150419", level = "date")
+
+sample_date["Q_dmb"].median()
+sample_date["Q_dmb"].std()
+
+# %% training dataset for the EMOS statistics:
+site = "Marsyangdi";  date_range = ['20140101', '20141231']
+obs_dir, train_datset = get_fcst_data ( date_range, site)
+
+day = 2
+
+# add observations:
+[train_dat, clim_vals] = add_obs(
+    place = site, fcst_df = train_datset, obs_dir = obs_dir, day = day)
+
+# bias correct and return 2 deterministic forecast outputs and 
+# also the overall bias corrected dataframe:
+lo_df, hi_df, train_dat, prob_verif =  post_process(train_dat, win_len, 
+                        clim_vals)
+
+# focus on low flow season only:
+train_dat  = train_dat[train_dat["Obs"] <= clim_vals["q70_flo"]]
+train_dat = train_dat[["Q_dmb", "Obs"]]
+
+
+
+# %%
+
+"""
+####### Kernel Density Estimation: ######
+"""
+
+
 
 # %% Bandwidth calculation:
 # Question: what is the optimum bandwidth?
@@ -73,10 +187,6 @@ day = 2
 # also the overall bias corrected dataframe:
 lo_df, hi_df, calib_dat, prob_verif =  post_process(calib_dat, win_len, 
                         clim_vals)
-
-# get index of the times when low flow is happening:
-# lo_times = calib_dat.loc[52, :].index[calib_dat.loc[52, :]["Obs"] <= clim_vals['q70_flo']]
-# hi_times = calib_dat.loc[52, :].index[calib_dat.loc[52, :]["Obs"] > clim_vals['q70_flo']]
 
 # focus on low flow season only:
 df_low  = calib_dat[calib_dat["Obs"] <= clim_vals["q70_flo"]]
