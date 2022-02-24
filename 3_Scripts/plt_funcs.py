@@ -66,8 +66,8 @@ def time_series_plotter(df, site, day):
         
         # plot OBS:
         fig.append_trace(
-                go.Scatter(x = df[df["ens_mem"] == 52]["date"],
-                    y=df[df["ens_mem"] == 52]["Obs"], name = "observed",
+                go.Scatter(x = df[df["ens_mem"] == 1]["date"],
+                    y=df[df["ens_mem"] == 1]["Obs"], name = "observed",
                     line = {"color":"red"}, mode = "lines+markers", 
                     legendgroup = "obs", showlegend = legend_decide), 
             row = fcst_types.index(type) + 1, col = 1
@@ -131,8 +131,8 @@ def time_series_individual(df, site, day, type):
     if type != 'runoff':
         # plot OBS:
         fig.add_trace(
-                go.Scatter(x = df[df["ens_mem"] == 52]["date"],
-                    y=df[df["ens_mem"] == 52]["Obs"], name = "observed",
+                go.Scatter(x = df[df["ens_mem"] == 1]["date"],
+                    y=df[df["ens_mem"] == 1]["Obs"], name = "observed",
                     line = {"color":"red"}, mode = "lines+markers", 
                     legendgroup = "obs")
         )
@@ -536,7 +536,6 @@ def kge_crps_plttr(det_verif, prob_verif, site, fcst_types):
     return fig, fig_crps
 
 
-
 ## FORECAST VS OBSERVATION PLOTS (Flow vs Flow):
 def scatter_plttr (df_det, bc_df, clim_vals, day, site,
                 fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"],
@@ -568,8 +567,8 @@ def scatter_plttr (df_det, bc_df, clim_vals, day, site,
             # fig.update_yaxes(type="log", range = [2.2,3.56], dtick = "L200")
 
             if flo_event == "high":
-                df  = bc_df[bc_df["Obs"] > clim_vals["q70_flo"]]
-            else : df  = bc_df[bc_df["Obs"] < clim_vals["q70_flo"]]
+                df  = bc_df[bc_df["Obs"] > clim_vals["q60_flo"]]
+            else : df  = bc_df[bc_df["Obs"] < clim_vals["q60_flo"]]
 
             # add y = x line
             fig.add_trace(
@@ -599,9 +598,9 @@ def scatter_plttr (df_det, bc_df, clim_vals, day, site,
 
             # Deterministic forecasts 
             if flo_event == "high":
-                df  = df_det[df_det["Obs"] > clim_vals["q70_flo"]] 
+                df  = df_det[df_det["Obs"] > clim_vals["q60_flo"]] 
             else : 
-                df  = df_det[df_det["Obs"] < clim_vals["q70_flo"]] 
+                df  = df_det[df_det["Obs"] < clim_vals["q60_flo"]] 
 
             # matrix of colors for individual deterministic forecast types:
             colors = iter(["cyan", "green", "blue"])
