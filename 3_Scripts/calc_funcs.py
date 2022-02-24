@@ -75,10 +75,10 @@ def add_obs(place, obs_dir, day, fcst_df):
             infer_datetime_format=True, index_col = [0])
 
     # calculate Q70 flow, low and high season mean flow values:
-    q70_flo     = obs.quantile(q = 0.7, axis =0, 
+    q60_flo     = obs.quantile(q = 0.6, axis =0, 
             numeric_only = True, interpolation = "linear")[0]
-    lo_flo_clim = obs[obs["Obs"] <= q70_flo][["Obs"]].mean().values
-    hi_flo_clim = obs[obs["Obs"] > q70_flo][["Obs"]].mean().values
+    lo_flo_clim = obs[obs["Obs"] <= q60_flo][["Obs"]].mean().values
+    hi_flo_clim = obs[obs["Obs"] > q60_flo][["Obs"]].mean().values
 
     # merge the forecasts and the observations datasets together. 
     # perform a left join with fcsts being the left parameter:
@@ -89,7 +89,7 @@ def add_obs(place, obs_dir, day, fcst_df):
 
     # create a python dictionary with the observed values:
     clim_vals = {
-        "q70_flo"       : q70_flo,
+        "q60_flo"       : q60_flo,
         "lo_flo_clim"   : lo_flo_clim,
         "hi_flo_clim"   : hi_flo_clim
     }
@@ -178,6 +178,8 @@ def nse_form(df, flo_mean, fcst_type = "Q_dmb"):
 
 # KGE + correlation, bias and flow variability:
 def kge_form(df, fcst_type = "Q_dmb"):
+
+    
     # calculate pearson coefficient:
     correlation      = HydroErr.pearson_r(df[fcst_type], df["Obs"])
     # calculate flow variability error or coef. of variability:
@@ -199,8 +201,8 @@ def metric_calc(df_det, clim_vals,
     fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
     
     # defines dataframes for low_flow and high_flow values
-    df_low  = df_det[df_det["Obs"] <= clim_vals["q70_flo"]]
-    df_high = df_det[df_det["Obs"] > clim_vals["q70_flo"]]
+    df_low  = df_det[df_det["Obs"] <= clim_vals["q60_flo"]]
+    df_high = df_det[df_det["Obs"] > clim_vals["q60_flo"]]
 
     # loop through the two dataframes to create:
     for df in [df_low, df_high]:
@@ -251,9 +253,9 @@ def prob_metrics(bc_df, clim_vals,
 
         # define the subset of dataset to workn with:
         if flo_con == "low":
-            df  = bc_df[bc_df["Obs"] <= clim_vals["q70_flo"]]
+            df  = bc_df[bc_df["Obs"] <= clim_vals["q60_flo"]]
         else :
-            df  = bc_df[bc_df["Obs"] > clim_vals["q70_flo"]]
+            df  = bc_df[bc_df["Obs"] > clim_vals["q60_flo"]]
 
         crps_vals = []
         # loop through the raw and bias corrected forecasts:
@@ -267,7 +269,7 @@ def prob_metrics(bc_df, clim_vals,
             # crps = ens_crps(obs, frcsts)
 
             # CRPS xskillscore 
-            ds           = df.xs(key = 52)[["Obs"]].to_xarray()
+            ds           = df.xs(key = 1)[["Obs"]].to_xarray()
             ds['frcsts'] = df.reorder_levels(["date", "ens_mem"]) \
                                 .sort_index().to_xarray()[i]
             ds      = ds.rename_dims({"ens_mem":"member"})
@@ -311,7 +313,7 @@ def post_process(fcst_data, win_len, clim_vals,
     # calculate probabilitic verification (CRPS):
     prob_verif = prob_metrics(bc_df, clim_vals, fcst_types)
 
-    return lo_verif, hi_verif, bc_df, prob_verif
+    return lo_verif, hi_verif, bc_df, prob_verif, df_det
 
 # forecast calibration:
 def fcst_calibrator (fcst_data, clim_vals, 
