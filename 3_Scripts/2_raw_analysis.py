@@ -39,7 +39,7 @@ def get_fcst_data (date_range, site):
 
 # %% ######################################### %% #
 ############# Load Forecast Data ################
-site = "Trishuli";  date_range = ['20140101', '20151231']
+site = "Naugadh";  date_range = ['20140101', '20141231']
 obs_dir, fcst_data = get_fcst_data ( date_range, site)
 # fcst_data is the original df used for all later calculations:
 
@@ -54,8 +54,8 @@ def scatter_plt (det_df, bc_df, fcst_type = "Q_raw") :
         layout = {
             "xaxis_title"       : "observations (<i>m<sup>3</sup>/s</i>)",
             "yaxis_title"       : "forecasted discharge (<i>m<sup>3</sup>/s</i>)",    
-            "yaxis_range"       : [0, 500],
-            "xaxis_range"       : [0, 370],
+            "yaxis_range"       : [0, 170],
+            # "xaxis_range"       : [0, 370],
             "xaxis_rangemode"   : "tozero",
             "font_size"         : 18,
             "title"             : f"forecast horizon = {bc_df.day.unique()[0]}",
@@ -76,6 +76,15 @@ def scatter_plt (det_df, bc_df, fcst_type = "Q_raw") :
     )
 
     ####
+    # Plot all forecasts vs observations
+    fig.add_trace(
+        go.Scattergl(
+            x = bc_df['Obs'], y = bc_df[fcst_type], 
+            mode = "markers", showlegend = True, 
+            name = "all fcst/obs pairs", marker = {"color":"grey"})
+    )
+
+    ####
     # add y = x line
     fig.add_trace(
         go.Scattergl(
@@ -90,14 +99,6 @@ def scatter_plt (det_df, bc_df, fcst_type = "Q_raw") :
                 name = "y = x", line = {"color":"black"})
     )
 
-    ####
-    # Plot all forecasts vs observations
-    fig.add_trace(
-        go.Scattergl(
-            x = bc_df['Obs'], y = bc_df[fcst_type], 
-            mode = "markers", showlegend = True, 
-            name = "all fcst/obs pairs", marker = {"color":"grey"})
-    )
 
     ####
     # Deterministic forecast plots
@@ -149,12 +150,12 @@ for day in days:
     fig = scatter_plt (det_df, bc_df, fcst_type = "Q_raw")
 
     # save as html
-    # save_pth = f'../4_Results/01-Scatter_raw/{site}-day_{day}-raw-scatter.html' 
-    # fig.write_html(save_pth)
+    save_pth = f'../4_Results/01-Scatter_raw/{site}-day_{day}-raw-scatter.html' 
+    fig.write_html(save_pth)
 
-    # # save as jpg:
-    # save_pth = f'../4_Results/01-Scatter_raw/{site}-day_{day}-raw-scatter.jpg' 
-    # fig.write_image(save_pth)
+    # save as jpg:
+    save_pth = f'../4_Results/01-Scatter_raw/{site}-day_{day}-raw-scatter.jpg' 
+    fig.write_image(save_pth)
 
     # show on screen
     fig.show( )
