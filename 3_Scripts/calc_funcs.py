@@ -74,8 +74,8 @@ def add_obs(place, obs_dir, day, fcst_df):
             names = ["date", "Obs"], skiprows=2, parse_dates=[0], 
             infer_datetime_format=True, index_col = [0])
 
-    # calculate Q70 flow, low and high season mean flow values:
-    q60_flo     = obs.quantile(q = 0.6, axis =0, 
+    # calculate Q60 flow, low and high season mean flow values:
+    q60_flo     = obs.quantile(q = 0.6, axis = 0, 
             numeric_only = True, interpolation = "linear")[0]
     lo_flo_clim = obs[obs["Obs"] <= q60_flo][["Obs"]].mean().values
     hi_flo_clim = obs[obs["Obs"] > q60_flo][["Obs"]].mean().values
@@ -248,10 +248,10 @@ def prob_metrics(bc_df, clim_vals,
     fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
     
     prob_verif = []
-    # loop through the two dataframes to create:
+    # Calculate CRPS for high and low flow conditions:
     for flo_con in ["low", "high"]:
 
-        # define the subset of dataset to workn with:
+        # define the subset of dataset to work with:
         if flo_con == "low":
             df  = bc_df[bc_df["Obs"] <= clim_vals["q60_flo"]]
         else :
@@ -279,7 +279,7 @@ def prob_metrics(bc_df, clim_vals,
             
             # end for along fcst_types
 
-        # create a dataframe out of 
+        # create a df with the crps values and the forecast type
         data = pd.DataFrame(
             {"fcst_type":fcst_types, 
             "crps":np.array(crps_vals)}
