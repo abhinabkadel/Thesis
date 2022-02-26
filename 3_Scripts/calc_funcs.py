@@ -197,7 +197,7 @@ def kge_form(df, fcst_type = "Q_dmb"):
     return pd.DataFrame(np.array([[correlation, flow_variability, bias, KGE]]))
 
 # calculate deterministic verification metrics:
-def metric_calc(df_det, clim_vals, 
+def metric_calc(df_det, bc_df, clim_vals, 
     fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
     
     # defines dataframes for low_flow and high_flow values
@@ -219,15 +219,27 @@ def metric_calc(df_det, clim_vals,
             NSE = df.groupby(by = "det_frcst").apply(
                     lambda x:nse_form(x, flo_mean, i)
                 )
+            # NSE for individual ensemble members as det frcsts:
+            nse_all_mem = bc_df.groupby(by = "ens_mem").apply(
+                    lambda x:nse_form(x, flo_mean, i)
+                )            
+
             # KGE:
             kge = df.groupby(by = "det_frcst").apply(
                     lambda x:kge_form(x, i)
                 )
+            # KGE for individual ensemble members as det frcsts:
+            kge_all_mem = bc_df.groupby(by = "ens_mem").apply(
+                    lambda x:kge_form(x, i)
+                )
 
             # concatenate and create a dataframe
-            verifs = pd.concat([NSE, kge.droplevel(1)], axis = 1).set_axis([
-                "NSE", "r", "flo_var", "bias", "KGE"], axis = 1
-                )
+            verifs = pd.concat(
+                        [ pd.concat( [ nse, nse_all_mem ] ), 
+                            pd.concat( [ kge.droplevel(1), kge_all_mem.droplevel(1)] )]
+                        , axis = 1).set_axis(
+                            ["NSE", "r", "flo_var", "bias", "KGE"], axis = 1
+                    )
             # new index with the fcst_type information:
             verifs["fcst_type"] = i
 
@@ -308,7 +320,7 @@ def post_process(fcst_data, win_len, clim_vals,
     df_det = det_frcsts(bc_df.reset_index(), fcst_types)
 
     # calculate the metrics:
-    lo_verif, hi_verif = metric_calc(df_det, clim_vals, fcst_types)
+    lo_verif, hi_verif = metric_calc(df_det, bc_df, clim_vals, fcst_types)
 
     # calculate probabilitic verification (CRPS):
     prob_verif = prob_metrics(bc_df, clim_vals, fcst_types)
