@@ -75,7 +75,7 @@ def add_obs(place, obs_dir, day, fcst_df):
             infer_datetime_format=True, index_col = [0])
 
     # calculate Q60 flow, low and high season mean flow values:
-    q60_flo     = obs.quantile(q = 0.6, axis = 0, 
+    q60_flo     = obs.quantile(q = 0.7, axis = 0, 
             numeric_only = True, interpolation = "linear")[0]
     lo_flo_clim = obs[obs["Obs"] <= q60_flo][["Obs"]].mean().values
     hi_flo_clim = obs[obs["Obs"] > q60_flo][["Obs"]].mean().values
@@ -87,12 +87,21 @@ def add_obs(place, obs_dir, day, fcst_df):
                     obs, left_index=True, 
                     right_index=True).sort_index()
 
+    q95_flo     = obs.quantile(q = 0.95, axis = 0, 
+        numeric_only = True, interpolation = "linear")[0]
+
+
     # create a python dictionary with the observed values:
     clim_vals = {
         "q60_flo"       : q60_flo,
         "lo_flo_clim"   : lo_flo_clim,
-        "hi_flo_clim"   : hi_flo_clim
+        "hi_flo_clim"   : hi_flo_clim,
+        "q95_flo"       : q95_flo
     }
+
+    # drop the column 
+    if day == 11:
+        df = df.drop(52)
 
     return df, clim_vals
 
@@ -127,18 +136,28 @@ def dmb_calc(df, window, variation = "dmb"):
     return df
 
 # Bias correct forecasts (each ensemble member is independent) :
-def bc_fcsts(df, win_len ):     
-
-    dmb_vars = ["dmb", "ldmb"]
-
-    for variation in dmb_vars:
+def bc_fcsts(df, win_len, approach ):     
         
-        # Calculate dmb ratio:
-        df = df.groupby(by = "ens_mem").apply(
-            lambda x:dmb_calc(x, window = win_len, variation = variation)
-        )    
+    variation = "dmb"
 
-        # APPLY BIAS CORRECTION FACTOR:
+    # Calculate dmb ratio:
+    df = df.groupby(by = "ens_mem").apply(
+        lambda x:dmb_calc(x, window = win_len, variation = variation)
+    )    
+
+    if approach == "common_DMB":
+        # apply common bias corrector to all members:
+        avg_dmb = df[variation].groupby("date", dropna = False).mean().shift(periods = 1)
+        df = df.groupby(by = "ens_mem", dropna = False).apply(
+                lambda df:df.assign(
+                    new_val = df["Q_raw"].values / avg_dmb.values
+                )
+            ).rename(
+                columns = {'new_val':"Q_"+variation+ "_2"}
+            ).sort_index() 
+
+    else:
+        # bias correct each mem independently:
         df = df.groupby(by = "ens_mem", dropna = False).     \
             apply(lambda df:df.assign(
                 new_val = df["Q_raw"].values / df[variation].shift(periods=1).values )
@@ -148,6 +167,38 @@ def bc_fcsts(df, win_len ):
 
     return df
 
+def bc_fcsts_variations(df, win_len):     
+    
+    dmb_vars = ["dmb", "ldmb", "dmb-var", "ldmb-var"]
+    
+    for variation in dmb_vars:
+        
+        # Calculate dmb ratio:
+        df = df.groupby(by = "ens_mem").apply(
+            lambda x:dmb_calc_variations(x, window = win_len, variation = variation)
+        )    
+
+        # APPLY BIAS CORRECTION FACTOR:
+        # separate bias correction to individual members
+        df = df.groupby(by = "ens_mem", dropna = False).     \
+            apply(lambda df:df.assign(
+                new_val = df["Q_raw"].values / df[variation].shift(periods=1).values )
+            ).rename(
+                columns = {'new_val':"Q_"+variation}
+            ).sort_index()
+
+        # same bias correction to all members
+        avg_dmb = df[variation].groupby("date", dropna = False).mean().shift(periods = 1)
+        df = df.groupby(by = "ens_mem", dropna = False).apply(
+                lambda df:df.assign(
+                    new_val = df["Q_raw"].values / avg_dmb.values
+                )
+            ).rename(
+                columns = {'new_val':"Q_"+variation+ "_2"}
+            ).sort_index() 
+
+    return df
+    
 # function to create determininstic forecasts (mean, median and high-res):
 def det_frcsts (df, fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):    
     # ensemble median:
@@ -200,27 +251,31 @@ def kge_form(df, fcst_type = "Q_dmb"):
 def metric_calc(df_det, bc_df, clim_vals, 
     fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
     
-    # defines dataframes for low_flow and high_flow values
-    df_low  = df_det[df_det["Obs"] <= clim_vals["q60_flo"]]
-    df_high = df_det[df_det["Obs"] > clim_vals["q60_flo"]]
-
     # loop through the two dataframes to create:
-    for df in [df_low, df_high]:
-        flo_mean = clim_vals["lo_flo_clim"] if df.equals(df_low) \
-            else clim_vals["hi_flo_clim"]
+    for flo_con in ["low", "high"]:
+
+        # defines dataframes for low_flow and high_flow values
+        if flo_con == "low":
+            df      = df_det[df_det["Obs"] <= clim_vals["q60_flo"]]
+            df_p    = bc_df[bc_df["Obs"] <= clim_vals["q60_flo"]]
+            flo_mean = clim_vals["lo_flo_clim"]
+
+        else:
+            df      = df_det[df_det["Obs"] > clim_vals["q60_flo"]]
+            df_p    = bc_df[bc_df["Obs"] > clim_vals["q60_flo"]]
+            flo_mean = clim_vals["hi_flo_clim"]
         
-        # loop through win len
-        # fcst_Day
+        # empty list that holds the information on the verification:
         data = []
         
         # loop through the raw and bias corrected forecasts:
         for i in fcst_types:
             # NSE:
-            NSE = df.groupby(by = "det_frcst").apply(
+            nse = df.groupby(by = "det_frcst").apply(
                     lambda x:nse_form(x, flo_mean, i)
                 )
             # NSE for individual ensemble members as det frcsts:
-            nse_all_mem = bc_df.groupby(by = "ens_mem").apply(
+            nse_all_mem = df_p.groupby(by = "ens_mem").apply(
                     lambda x:nse_form(x, flo_mean, i)
                 )            
 
@@ -229,7 +284,7 @@ def metric_calc(df_det, bc_df, clim_vals,
                     lambda x:kge_form(x, i)
                 )
             # KGE for individual ensemble members as det frcsts:
-            kge_all_mem = bc_df.groupby(by = "ens_mem").apply(
+            kge_all_mem = df_p.groupby(by = "ens_mem").apply(
                     lambda x:kge_form(x, i)
                 )
 
@@ -247,11 +302,13 @@ def metric_calc(df_det, bc_df, clim_vals,
 
         # end for along fcst_types
 
-        if flo_mean == clim_vals["lo_flo_clim"]:
+        if flo_con == "low":
             lo_verif = pd.concat(data)
+            lo_verif.index.rename("det_frcst", inplace = True)
 
         else : 
             hi_verif = pd.concat(data)
+            hi_verif.index.rename("det_frcst", inplace = True)
         
     return lo_verif, hi_verif
 
@@ -312,9 +369,13 @@ def prob_metrics(bc_df, clim_vals,
 def post_process(fcst_data, win_len, clim_vals,
         fcst_types = ["Q_raw", "Q_dmb", "Q_ldmb"]):
 
-    # Bias correct the forecasts using DMB and LDMB
-    bc_df = bc_fcsts(df = fcst_data, win_len = win_len )
+    if fcst_types == ["Q_raw", "Q_dmb", "Q_ldmb", "Q_dmb-var", "Q_ldmb-var"]:
+        bc_df = bc_fcsts_variations(fcst_data, win_len)
+    else :
+        # Bias correct the forecasts using DMB and LDMB
+        bc_df = bc_fcsts(fcst_data, win_len, "" )
 
+    fcst_types = bc_df.columns[bc_df.columns.str.startswith("Q")].values.tolist()
     # Separate dataframes for deterministic forecasts:
     # df = t1.reset_index()
     df_det = det_frcsts(bc_df.reset_index(), fcst_types)
@@ -336,7 +397,7 @@ def fcst_calibrator (fcst_data, clim_vals,
     hi_verif    = []
     prob_verif  = []
     for win_len in windows:
-        lo_df, hi_df, bc_df, prob_df =  post_process(fcst_data, win_len, 
+        lo_df, hi_df, bc_df, prob_df, det_df =  post_process(fcst_data, win_len, 
                             clim_vals, fcst_types)
         lo_df["win_length"]     = win_len
         hi_df["win_length"]     = win_len
@@ -436,26 +497,6 @@ def dmb_calc_variations(df, window, variation = "dmb"):
             df.Obs.rolling(window).sum().values
         return df
 
-def bc_fcsts_variations(df, win_len):     
-    
-    dmb_vars = ["dmb", "ldmb", "dmb-var", "ldmb-var"]
-    
-    for variation in dmb_vars:
-        
-        # Calculate dmb ratio:
-        df = df.groupby(by = "ens_mem").apply(
-            lambda x:dmb_calc_variations(x, window = win_len, variation = variation)
-        )    
-
-        # APPLY BIAS CORRECTION FACTOR:
-        df = df.groupby(by = "ens_mem", dropna = False).     \
-            apply(lambda df:df.assign(
-                new_val = df["Q_raw"].values / df[variation].shift(periods=1).values )
-            ).rename(
-                columns = {'new_val':"Q_"+variation}
-            ).sort_index()
-    
-    return df
 
 def dmb_vars_test(fcst_types, days, win_len, site, fcst_data, obs_dir): 
     lo_verif    = []
@@ -579,3 +620,5 @@ def runoff_data_creator(site, date_range):
     runoff_data.to_pickle("./pickle_dfs/" + site + "_runoff.pkl")
 
     return runoff_data
+
+    
