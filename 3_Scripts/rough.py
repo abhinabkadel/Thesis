@@ -71,3 +71,40 @@ test = pd.read_csv( os.path.join(obs_dir, "MHPS_DISCHARGE-2077"+".csv"),
 test.head()            
 test = pd.melt(test, id_vars = 'Days', var_name = "month", value_name = "discharge" )
 test.to_csv(os.path.join(obs_dir, "MHPS_DISCHARGE_long-2077"+".csv"))
+
+
+# %%
+                # add a dummy trace for legend entries:
+                # fig.append_trace(
+                #     go.Scatter(
+                #         x = [1], y = [1],
+                #         marker = {
+                #             'size'      : 10,
+                #             'opacity'   : 0
+                #         },
+                #         line = dict(
+                #             color = 'black', width=2,
+                #             dash  = dash_opt
+                #             ),                        
+                #         name =  det_frcst, 
+                #         legendgroup = det_frcst, 
+                #         hoverinfo = 'skip', 
+                #         showlegend = legend_decide                           
+                #     ),row = row, col = col
+                # )
+
+                    # Plotly does not allow 2 different legends for a plot. Hence, this approach:
+    # add color chart for different metrics as an image:
+    from base64 import b64encode
+    image_filename      = '../5_Images/det_metrics_image.png'
+    det_legend_items    = b64encode(open(image_filename, 'rb').read())
+    # add deterministic_forecasts lists as image
+    fig.add_layout_image(
+        dict(
+            source  = 'data:image/png;base64,{}'.format(det_legend_items.decode()),
+            xref    = "paper", yref = "paper",
+            x = 1.06, y = 0.1,
+            sizex=0.5, sizey=0.5,
+            xanchor="right", yanchor="bottom"
+        )
+    )

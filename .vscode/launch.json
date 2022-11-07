@@ -5,7 +5,8 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "cwd": "${workspaceFolder}",
+            // "cwd": "${fileDirname}",
+            "cwd": "",
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
