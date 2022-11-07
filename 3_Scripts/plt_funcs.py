@@ -11,20 +11,36 @@ def time_series_plotter(df, site, day):
     fig = make_subplots(rows = 2, cols = 1,
                         shared_xaxes = True,
                         shared_yaxes = True,
-                        vertical_spacing = 0.09,
-                        subplot_titles=("Raw", "bias-corrected (equal weight)", 
-                            "bias-corrected (linearly-weighted)"),
-                        x_title = "date",
+                        vertical_spacing = 0.06,
+                        subplot_titles=("Raw", "bias-corrected"),
                         y_title = "River discharge (<i>m<sup>3</sup>/s</i>)"    
                         )
     # Add figure and legend title                  
     fig.update_layout(
-        title_text = "Bias-correction for streamflow forecasts"+
-            f"<br> site = {site}, horizon = {day}",
-        title_x = 0.5,
-        legend_title = "Legend", 
-        yaxis_rangemode = "tozero"
+        title_text  = "<b> Bias-correction for streamflow forecasts"+
+            f"<b> <br> site = {site}, horizon = {day}",
+        title_x     = 0.5,
+        title_y     = 0.96,
+        margin_r    = 10,  
+        yaxis2_rangemode    = "tozero",
+        legend      = {
+            "yanchor"   : "top",
+            "xanchor"   : "left",
+            'x'         : 0.0,
+            'y'         : 1.,
+            'itemwidth' : 30,
+            'font_size' : 12 
+        },
+        font_size   = 18,
         )
+
+    # adjust horizontal positioning of yaxis title:
+    fig.layout.annotations[-1]["xshift"] = -50
+
+    # increase size of subplot titles:
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=20)
+
     # loop through the forecast types:
     fcst_types = ["Q_raw", "Q_dmb"]
     for type in fcst_types:
@@ -76,38 +92,45 @@ def time_series_plotter(df, site, day):
     return fig
 
 # time series for individual bias correction option:
-def time_series_individual(df, site, day, type):
+def time_series_individual(df, site, day, fcst_type):
+## df should be passed with reset indices
+# fcst_type is a string
 
-    yaxis_txt = "catchment runoff (<i>m<sup>3</sup></i>)" if type == 'runoff' \
+    yaxis_txt = "catchment runoff (<i>m<sup>3</sup></i>)" if fcst_type == 'runoff' \
         else "River discharge (<i>m<sup>3</sup>/s</i>)"
 
     fig = go.Figure(
         layout = {
-            "xaxis_title" : "date",
-            "yaxis_title" : "River discharge (<i>m<sup>3</sup>/s</i>)"    
+            "yaxis_title"   : yaxis_txt,    
+            "title_text"    : f"<b> Day {day} raw forecast time series"+
+                                f"<br> site = {site} </b>",
+            "font_size"         : 18,
+            "title_x"           : 0.5,
+            "title_y"           : 0.92,
+            "margin_t"          : 100,
+            "margin_r"          : 10,
+            "margin_b"          : 10,
+            "yaxis_rangemode"   : "tozero",
+            "legend"            : {
+                                    "yanchor"   : "top",
+                                    "y"         : 0.98,
+                                    "xanchor"   : "left",
+                                    "x"         : 0.01,
+                                    "font_size" : 14
+                                    }        
         }  
     )
 
-    # Add figure and legend title                  
-    fig.update_layout(
-        title_text = "Bias-correction for streamflow forecasts"+
-            f"<br> site = {site}, forecast horizon = {day}",
-        title_x = 0.5,
-        legend_title = "Legend", 
-        yaxis_rangemode = "tozero"
-        )
-
-    # bc_df = bc_df.reset_index()
     # add ENSEMBLE SPREAD    
     fig.add_trace(
-        go.Box(x = df["date"], y=df[type], line = {"color":"rosybrown"},
+        go.Box(x = df["date"], y=df[fcst_type], line = {"color":"rosybrown"},
         name = "ensemble spread", legendgroup = "ens")
     )
 
     # plot HIGH-RES
     fig.add_trace( 
         go.Scatter(x = df[df["ens_mem"] == 52]["date"], 
-                y = df[df["ens_mem"] == 52][type],
+                y = df[df["ens_mem"] == 52][fcst_type],
                 name = "high res", line = {"color":"blue"},
                 legendgroup = "high-res")
     )
@@ -115,7 +138,7 @@ def time_series_individual(df, site, day, type):
     # plot ENS-MEDIAN
     fig.add_trace( 
         go.Scatter(x = df.groupby(by = "date").median().index,
-                y = df.groupby(by = "date").median()[type],
+                y = df.groupby(by = "date").median()[fcst_type],
                 name = "ensemble median", line = {"color":"cyan"},
                 legendgroup = "ens-med")
     )
@@ -123,12 +146,12 @@ def time_series_individual(df, site, day, type):
     # plot ENS-MEAN
     fig.add_trace( 
         go.Scatter(x = df.groupby(by = "date").mean().index,
-                y = df.groupby(by = "date").mean()[type],
+                y = df.groupby(by = "date").mean()[fcst_type],
                 name = "ensemble mean", line = {"color":"green"},
                 legendgroup = "ens-mean")
     )
 
-    if type != 'runoff':
+    if fcst_type != 'runoff':
         # plot OBS:
         fig.add_trace(
                 go.Scatter(x = df[df["ens_mem"] == 1]["date"],
@@ -171,16 +194,26 @@ def calibrtn_plttr (hi_verif, lo_verif, prob_verif, site, day,
                         )
     # Add figure and legend title                  
     fig.update_layout(
-        title_text = "Verification scores for different window lengths"+
-            f"<br> site = {site}, day = {day}, flow season = {flo_con} ",
-        title_x = 0.5,
-        legend_title = "Legend", 
+        title_text  = "<b> Verification scores for different window lengths"+
+            f"<b> <br> site = {site}, day = {day}, flow season = {flo_con} ",
+        title_x     = 0.5,
+        title_y     = 0.96,
+        font_size   = 18,
+        margin_r    = 10, 
+        legend      = {
+            'x': 0.98,
+            'y': 1.,
+            'itemwidth':40, 
+            }
         )
-    # update both y axes:
-    fig.update_yaxes(
-        rangemode = "tozero",
-        range = [0.5, 1.1]
-        )
+
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=20)
+        # update both y axes:
+        fig.update_yaxes(
+            rangemode = "tozero",
+            range = [0.5, 1.1]
+            )
 
     # only extract the ensemble median
     df_big = df_big.xs('median', level = 2)
@@ -244,7 +277,7 @@ def calibrtn_plttr (hi_verif, lo_verif, prob_verif, site, day,
 
 ## SKILL Evolution (Skill vs Forecast Horizon)
 # plot for deterministic forecasts only:
-def det_skill_horizon_plttr (det_verif, site):
+def det_skill_horizon_plttr (det_verif, site, det_frcst, fcst_types = ["Q_raw", "Q_dmb"]):
     # make subplot interface
     fig = make_subplots(cols         = 2,
                         rows         = 2, 
@@ -265,26 +298,37 @@ def det_skill_horizon_plttr (det_verif, site):
                         )
                         
     fig.update_layout(
-        title_text = "<b> deterministic forecast skill across" + 
+        title_text = "<b> deterministic forecast skill across " + 
                 "different forecast horizons" + 
-                f"<br> site = </b> {site}",
+                f"<br> site = {site} | member = {det_frcst} </b> ",
         title_x    =  0.5,
+        title_y    = 0.96,
+        font_size  = 18,
         legend     = {
-            'x': 0.95,
-            'y': 1,
-            'itemwidth':40, 
+            'x'         : 0.95,
+            'y'         : 1,
+            'itemwidth' : 40, 
+            'font_size' : 14
             # 'sizey':0.5
         },
         margin     = {
-            'b' : 50,
-            't' : 70
+            'b' : 60,
+            'r' : 10,
+            't' : 100
         } 
     )
+
+    # adjust horizontal positioning of yaxis title:
+    fig.layout.annotations[-1]["xshift"] = -50
+
+    # increase size of subplot titles:
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=20)
 
     row = 1
 
     # loop through the forecast types:
-    fcst_types = ["Q_raw", "Q_dmb"]
+    
     for fcst_type in fcst_types:
         
         col = 1
@@ -292,84 +336,41 @@ def det_skill_horizon_plttr (det_verif, site):
         # loop through the flow conditions:
         for flow_con in ['low', 'high'] :
 
-            # different line plot types for the different
-            # deterministic forecasts
-            dash    = iter(['solid', 'longdash', 'dot'])
+            # define color option to be used:
+            colors  = iter(pc.qualitative.D3)            
 
-            # plot the deterministic forecasts:
-            for det_frcst in ['high-res', 'mean', 'median'] :
+            # show only one legend entry for the traces
+            legend_decide = True if row == 1 and col == 1 else False
 
-                # define color and dash option to be used:
-                colors  = iter(pc.qualitative.D3)            
-                dash_opt = next(dash)
+            # deterministic metrics:
+            metrics = ["NSE", "r", "flo_var", "bias", "KGE"]
+            for metric in metrics:
 
-                # deterministic metrics:
-                metrics = ["NSE", "r", "flo_var", "bias", "KGE"]
-                for metric in metrics:
-
-                    # show only 1 legend entry for the det frcst type:
-                    legend_decide = True if fcst_type == 'Q_raw' and \
-                        flow_con == 'low' and metric == "NSE" else False
-
-                    # add a dummy trace for legend entries:
-                    fig.append_trace(
-                        go.Scatter(
-                            x = [1], y = [1],
-                            marker = {
-                                'size'      : 10,
-                                'opacity'   : 0
-                            },
-                            line = dict(
-                                color = 'black', width=2,
-                                dash  = dash_opt
-                                ),                        
-                            name =  det_frcst, 
-                            legendgroup = det_frcst, 
-                            hoverinfo = 'skip', 
-                            showlegend = legend_decide                           
-                        ),row = row, col = col
-                    )
-
-                    # plot the deterministic metrics:
-                    fig.add_trace(
-                        go.Scatter(
-                            x = det_verif.index.get_level_values("day")
-                                    .unique().values,
-                            y = det_verif.xs(fcst_type, level = "fcst_type")
-                                    .xs(flow_con, level = "flow_clim")
-                                    .xs(det_frcst, level = "det_frcst")[metric],
-                            line = dict(
-                                color = next(colors), width=4,
-                                dash = dash_opt, shape = 'spline'
-                                ), 
-                            name =  det_frcst, 
-                            legendgroup = det_frcst, 
-                            showlegend = False
-                        ), 
-                        row = row, col = col
-                    )
+                # plot the deterministic metrics:
+                fig.add_trace(
+                    go.Scatter(
+                        x = det_verif.index.get_level_values("day")
+                                .unique().values,
+                        y = det_verif.xs(fcst_type, level = "fcst_type")
+                                .xs(flow_con, level = "flow_clim")
+                                .xs(det_frcst, level = "det_frcst")[metric],
+                        line = dict(
+                            color = next(colors), 
+                            width=4, 
+                            shape = 'spline'
+                            ), 
+                        name =  metric, 
+                        legendgroup = metric, 
+                        showlegend = legend_decide
+                    ), 
+                    row = row, col = col
+                )
             
             # change the column
             col = col + 1
         
         # change the row 
         row = row + 1
-
-    # Plotly does not allow 2 different legends for a plot. Hence, this approach:
-    # add color chart for different metrics as an image:
-    from base64 import b64encode
-    image_filename      = '../5_Images/det_metrics_image.png'
-    det_legend_items    = b64encode(open(image_filename, 'rb').read())
-    # add deterministic_forecasts lists as image
-    fig.add_layout_image(
-        dict(
-            source  = 'data:image/png;base64,{}'.format(det_legend_items.decode()),
-            xref    = "paper", yref = "paper",
-            x = 1.06, y = 0.1,
-            sizex=0.5, sizey=0.5,
-            xanchor="right", yanchor="bottom"
-        )
-    )
 
     return fig
 
@@ -379,10 +380,23 @@ def crps_horizon_plttr(prob_verif, site):
     fig = go.Figure(
         layout = {
             "xaxis_title"   : "forecast horizon (day)",
-            "yaxis_title"   : "CRPS",    
+            "yaxis"         : {
+                                "title"          : "CRPS",      
+                                "title_standoff" : 5 
+                                },
             "title"         : "<b> CRPS across different forecast horizons </b> <br> " + 
-                            "site = " + site,
-            "title_x"       : 0.5        
+                                    "site = " + site,
+            "font_size"     : 18,
+            "title_x"       : 0.5,
+            "margin_r"      : 10,
+            "margin_b"      : 10,        
+            "legend"        : {
+                        "yanchor"   : "top",
+                        "y"         : 1.25,
+                        "xanchor"   : "left",
+                        "x"         : -0.1,
+                        "font_size" : 14
+                    }
         }
     )
 
@@ -632,16 +646,31 @@ def scatter_plttr (df_det, bc_df, clim_vals, day, site,
 
 
 ## DMB variation (DMB vs Time)
-def dmb_vars_plttr (bc_df, dmb_vars):
+def dmb_vars_plttr (bc_df, dmb_vars, site, day):
+    
     fig = go.Figure(
         layout = {
-            "xaxis_title"   : "date",
-            "yaxis_title"   : "DMB ratio",    
-            "title"         : "Time series progression of DMB values",
-            "title_x"       : 0.5
-        }  
+            "yaxis_title"       : "DMB ratio",    
+            "yaxis_rangemode"   : "tozero",
+            "font_size"         : 18,
+            "title"             : f"<b> DMB time series" + 
+                                f"<b> <br> site = {site}, horizon = {day}",
+            "title_x"           : 0.5,
+            "showlegend"        : False,
+            "title_yanchor"     : "bottom",
+            "title_y"           : 0.92,
+            "margin_t"          : 60,
+            "margin_r"          : 10, 
+            "legend"            : {
+                                    "yanchor"   : "top",
+                                    "y"         : 0.98,
+                                    "xanchor"   : "left",
+                                    "x"         : 0.01,
+                                    "font_size" : 18
+                                }
+        }
     )
-
+    
     color       = pc.qualitative.D3
 
     for name in dmb_vars:
